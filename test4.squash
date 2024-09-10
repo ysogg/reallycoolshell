@@ -1,0 +1,8 @@
+
+echo hi there > test.output
+
+cat < test.output
+cat < test.output > test2.output
+
+sleep 5 &
+ls

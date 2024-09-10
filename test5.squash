@@ -1,0 +1,8 @@
+
+ls *.c
+ls *.squash
+
+ls -l Makefile.*
+
+echo test[123].squash
+

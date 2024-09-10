@@ -1,0 +1,62 @@
+##
+##	Makefile for squash interpreter assignment
+##
+
+
+##
+##	Variables
+##	---------
+##
+
+EXE		= squash
+
+# List of all of the object files in your projects
+OBJS	= \
+		squash_main.o \
+		squash_run.o \
+		squash_tokenize.o
+
+
+# Flags for compiling
+CFLAGS	= -g
+
+# Libs that need to be linked
+LDFLAGS	= 
+LDLIBS	=
+
+
+##
+##	Build Targets
+##	-------------
+##
+
+
+# Default target - build the shell
+$(EXE) : $(OBJS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $(EXE) $(OBJS) $(LDLIBS)
+
+##
+##	Cleanup Targets
+##	---------------
+##
+
+clean :
+	- rm -f $(EXE)
+	- rm -f $(OBJS)
+	- rm -f tags
+
+
+##
+##	Utility Targets
+##	---------------
+##
+
+# ctags makes a database of source code tags for use with vim and co
+tags ctags : dummy
+	- ctags *.c
+
+# a rule like this dummy rule can be use to make another rule always
+# run - ctags depends on this, so therefore ctags will always be
+# executed by "make ctags" as make is fooled into thinking that it
+# has performed a dependency each time, and therefore re-does the work
+dummy :

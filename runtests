@@ -1,0 +1,13 @@
+#!/bin/sh
+
+#
+# Simple test harness for "squash" shell
+#
+
+for file in test*.squash
+do
+	echo "Testing ${file}"
+	./squash -v "${file}"
+	echo " ** exit status $?"
+done
+

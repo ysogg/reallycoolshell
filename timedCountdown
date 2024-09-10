@@ -1,0 +1,36 @@
+#!/bin/bash
+
+#
+# Simple countdown program to provide a simple task that will take
+# a few seconds to run
+#
+
+### Code safety standards
+# -u : tell bash to fail if any variable is not set
+# -e : tell bash to fail if any command fails (unless in an if)
+# -o pipefail : tell bash to fail if part of a pipe fails (needs -e)
+set -e
+set -u
+set -o pipefail
+
+COUNT=10
+
+if [ $# -gt 0 ]
+then
+    if ! [ $1 -eq $1 ] 2> /dev/null
+    then
+        echo "Argument must be an integer number of seconds" >&2
+        exit 1
+    fi
+    COUNT=$1
+fi
+
+while [ $COUNT -gt 0 ]
+do
+    echo $COUNT
+    sleep 1
+    COUNT=$(( $COUNT - 1 ))
+done
+
+echo $COUNT
+

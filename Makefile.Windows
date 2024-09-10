@@ -1,0 +1,47 @@
+##
+##	Makefile for squash interpreter assignment
+##
+
+
+##
+##	Variables
+##	---------
+##
+
+EXE		= squash.exe
+
+# List of all of the object files in your projects
+OBJS = \
+		squash_main.obj \
+		squash_run.obj \
+		squash_tokenize.obj
+
+CC		= cl
+
+# Flags for compiling
+CFLAGS	= 
+
+# Libs that need to be linked
+LDFLAGS	= 
+LDLIBS	=
+
+
+##
+##	Build Targets
+##	-------------
+##
+
+# Default target - build the shell
+$(EXE) : $(OBJS)
+	$(CC) $(CFLAGS) $(OBJS) /link /out:$(EXE) $(LDFLAGS) $(LDLIBS)
+	icacls $(EXE) /grant Everyone:RX
+
+##
+##	Cleanup Targets
+##	---------------
+##
+
+clean :
+	- del /f $(EXE) $(OBJS)
+	- del /f *.pdb
+
