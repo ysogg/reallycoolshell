@@ -1,0 +1,80 @@
+#!/bin/bash
+
+ACTIVITY=A1
+ISODATE=`date +"%Y-%m-%d_%H%M.%S"`
+TAG="${ACTIVITY}_handin_${ISODATE}"
+PENDING_CHANGES="NO"
+
+
+GITSTAT=`git status | head -2 | tail -1`
+if [ `expr X"${GITSTAT}" : X"Your branch is up to date.*"` -eq 0 ]
+then
+	echo "" >&2
+	echo "!!! Local workspace out of sync with repo !!!" >&2
+	echo "" >&2
+	PENDING_CHANGES="YES"
+fi
+
+GITMODS=`git status | grep 'modified:' | wc | awk '{print $1;}'`
+if [ ${GITMODS} -gt 0 ]
+then
+	echo "" >&2
+	echo "!!! Local modifications detected !!!" >&2
+	echo "" >&2
+	PENDING_CHANGES="YES"
+fi
+
+if [ X"${PENDING_CHANGES}" != X"NO" ]
+then
+	echo "" >&2
+	echo "Error: Your remote gitlab repository is not up to date." >&2
+	echo "" >&2
+	echo "Error: You must add, commit and push all your local changes before" >&2
+	echo "       running the $0 script." >&2
+	echo "" >&2
+	echo "Run `git status` to see your local workspace status." >&2
+	echo "" >&2
+	exit 1
+fi
+
+
+STATUS="UNKNOWN"
+
+echo ""
+echo "***"
+echo "*** Handing in current repository with branch tag '${TAG}'"
+echo "***"
+echo ""
+
+if
+	git tag -a "${TAG}" -m "o Handing in activity as ${TAG}"
+then
+	if
+		git push origin "${TAG}"
+	then
+		STATUS="SUCCESS"
+		echo ""
+		echo "+++ Success: activity handed in successfully"
+		echo "+++          Tag: '${TAG}'"
+		echo ""
+	else
+		STATUS="FAILURE"
+		echo ""
+		echo "!!! Error: failed to push tag ${TAG} to git server" >&2
+	fi
+else
+	STATUS="FAILURE"
+	echo ""
+	echo "!!! Error: failed to create tag ${TAG}" >&2
+fi
+
+if [ X"${STATUS}" != X"SUCCESS" ]
+then
+	echo ""
+	echo "!!! ACTIVITY NOT HANDED IN !!!"
+	echo ""
+	echo '\b\b'
+	exit 1
+fi
+
+exit 0
