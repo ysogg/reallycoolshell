@@ -36,21 +36,21 @@
 
 
 
-//#elif defined( .... )	// add code to identify Linux
+#elif defined( __linux__ )	// add code to identify Linux
 
-//#   define OS_LINUX
-
-
-
-//#elif defined( .... )	// add code to identify MacOSX
-
-//#   define OS_DARWIN
+#   define OS_LINUX
 
 
 
-//#elif defined( .... )	// add code to identify Windows
+#elif defined( __APPLE__ )	// add code to identify MacOSX
 
-//#   define OS_WINDOWS
+#   define OS_DARWIN
+
+
+
+#elif defined( _WIN32 )	// add code to identify Windows
+
+#   define OS_WINDOWS
 
 
 

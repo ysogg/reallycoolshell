@@ -3,6 +3,7 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+#include <sys/wait.h>
 
 #include "os_defs.h"
 
@@ -34,7 +35,56 @@ int execFullCommandLine(
 		fprintfTokens(stderr, tokens, 1);
 	}
 
-	/** Now actually do something with this command, or command set */
+/** Now actually do something with this command, or command set */
+	//Output cmds broken up as "x" "y" "z"
+	for (int i = 0; i < nTokens; i++) {
+		if (i == nTokens-1) {
+			printf("\"%s\"", tokens[i]);
+		} else {
+			printf("\"%s\" ", tokens[i]);
+		}
+	}
+	printf("\n");
+
+	// Custom cmds
+	int numOfCmds = 2;
+	int manualNum = 0;
+	char* manualCmds[numOfCmds];
+	manualCmds[0] = "cd";
+	manualCmds[1] = "exit";
+
+	for (int i = 0; i < numOfCmds; i++) {
+		if (strcmp(manualCmds[i], tokens[0]) == 0) {
+			manualNum = i + 1;
+		}
+	}
+
+	switch(manualNum) {
+		case 1:
+			chdir(tokens[1]);
+			return 0;
+		case 2:
+			printf("Exiting...\n");
+			exit(0);
+		default:
+			break;
+	}
+
+
+//Fork everything else
+	pid_t pid = fork();
+	if (pid == -1) {
+		printf("\nFailed to fork :(");
+		return 1;
+	} else if (pid == 0) {
+		if (execvp(tokens[0], tokens) < 0) {
+			printf("\nCouldn't execute cmd");
+		}
+		exit(0);
+	} else {
+		wait(NULL);
+		return 0;
+	}
 
 	return 1;
 }
