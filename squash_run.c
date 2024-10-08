@@ -17,6 +17,9 @@ typedef struct {
 	char value[20][20];
 } VarDec;
 
+VarDec VarList[128];
+int ListIndex = 0;
+
 /**
  * Print a prompt if the input is coming from a TTY
  */
@@ -147,12 +150,13 @@ printf("COMPARE STATUS INT: %d\n", status);
 	return 1;
 }
 
-int assignVariable(char ** const tokens, int nTokens, VarDec *varList, int *index, int tokPos) {
+int assignVariable(char ** const tokens, int nTokens, int tokPos) {
 	char *varName = tokens[tokPos-1];
 	char varValue[20][20];
 	int valueLength = nTokens - tokPos;
 
 	VarDec newVar;
+	//if (varName[0] handle bad names
 	strcpy(newVar.name, varName);
 	for (int i = 0; i < valueLength; i++) {
 		if (tokPos + 1 == nTokens || tokens[tokPos + 1] == NULL) {
@@ -162,15 +166,15 @@ int assignVariable(char ** const tokens, int nTokens, VarDec *varList, int *inde
 		tokPos++;
 	}
 
-	varList[*index] = newVar;
-	(*index)++;
+	VarList[ListIndex] = newVar;
+	ListIndex++;
 	//quick
 	printf("Testing save\n");
-	for (int i = 0; i < *index; i++) {
-		if (varList[i].name != NULL) {
-			printf("%s: ", varList[i].name);
+	for (int i = 0; i < ListIndex; i++) {
+		if (VarList[i].name != NULL) {
+			printf("%s: ", VarList[i].name);
 			for (int j = 0; j < valueLength; j++) {
-				printf("%s ", varList[i].value[j]);
+				printf("%s ", VarList[i].value[j]);
 			}
 			printf("\n");
 		}
@@ -195,8 +199,6 @@ int execFullCommandLine(
 /** Now actually do something with this command, or command set */
 	//Output cmds broken up as "x" "y" "z"
 	int varAssign = 0;
-	VarDec varList[15];
-	int listCounter = 0;
 
 	for (int i = 0; i < nTokens; i++) {
 		if (i == nTokens-1) {
@@ -212,7 +214,7 @@ int execFullCommandLine(
 
 	//Store vars as name string : token list with n elements
 	if (varAssign > 0) {
-		assignVariable(tokens, nTokens, varList, &listCounter, varAssign);
+		assignVariable(tokens, nTokens, varAssign);
 		printf("Exited var func\n");
 		return 0;
 	}
