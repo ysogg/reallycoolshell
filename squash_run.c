@@ -12,6 +12,11 @@
 #include "squash_tokenize.h"
 
 
+typedef struct {
+	char name[20];
+	char value[20][20];
+} VarDec;
+
 /**
  * Print a prompt if the input is coming from a TTY
  */
@@ -58,7 +63,6 @@ int execPipedCommandLine(char ** const tokens, int nTokens, int numPipes) {
 	*/
 	int toksSincePipe = 0;
 	for (int i = 0; i < numPipes + 1; i++) {
-//REPLACE pipedCmd with proper max args
 		char pipedCmd[1][100];
 		char *execCmd[100];
 		int count = 0;
@@ -137,21 +141,41 @@ int execPipedCommandLine(char ** const tokens, int nTokens, int numPipes) {
 //These freaks are not exiting properly, but piping does work
 printf("COMPARE STATUS INT: %d\n", status);
 			statusMessageHandler(pid, status);
-			/*if (WIFEXITED(status)) {
-				int exitStatus = WEXITSTATUS(status);
-				if (exitStatus == 0) {
-					printf("Child(%d) exited -- success (%d)\n", pid, exitStatus);
-				} else {
-					printf("Child(%d) exited -- failure (%d)\n", pid, exitStatus);
-				}
-			} else {
-				printf("Child(%d) did not exit", pid);
-			}
-			printf("Status: %d\n", pid);*/
 		}
 
 	}
 	return 1;
+}
+
+int assignVariable(char ** const tokens, int nTokens, VarDec *varList, int *index, int tokPos) {
+	char *varName = tokens[tokPos-1];
+	char varValue[20][20];
+	int valueLength = nTokens - tokPos;
+
+	VarDec newVar;
+	strcpy(newVar.name, varName);
+	for (int i = 0; i < valueLength; i++) {
+		if (tokPos + 1 == nTokens || tokens[tokPos + 1] == NULL) {
+			break;
+		}
+		strcpy(newVar.value[i], tokens[tokPos + 1]);
+		tokPos++;
+	}
+
+	varList[*index] = newVar;
+	(*index)++;
+	//quick
+	printf("Testing save\n");
+	for (int i = 0; i < *index; i++) {
+		if (varList[i].name != NULL) {
+			printf("%s: ", varList[i].name);
+			for (int j = 0; j < valueLength; j++) {
+				printf("%s ", varList[i].value[j]);
+			}
+			printf("\n");
+		}
+	}
+	return 0;
 }
 
 /**
@@ -170,14 +194,28 @@ int execFullCommandLine(
 
 /** Now actually do something with this command, or command set */
 	//Output cmds broken up as "x" "y" "z"
+	int varAssign = 0;
+	VarDec varList[15];
+	int listCounter = 0;
+
 	for (int i = 0; i < nTokens; i++) {
 		if (i == nTokens-1) {
 			printf("\"%s\"", tokens[i]);
 		} else {
 			printf("\"%s\" ", tokens[i]);
 		}
+		if (strcmp(tokens[i], "=") == 0) {
+			varAssign = i;
+		}
 	}
 	printf("\n");
+
+	//Store vars as name string : token list with n elements
+	if (varAssign > 0) {
+		assignVariable(tokens, nTokens, varList, &listCounter, varAssign);
+		printf("Exited var func\n");
+		return 0;
+	}
 
 	// Custom cmds
 	int numOfCmds = 2;
