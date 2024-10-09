@@ -9,7 +9,6 @@ int runScriptFile(FILE *ofp, FILE *pfp, const char *filename, int verbosity);
 
 #define	MAXCOMMANDSINPIPE	8
 #define MAX_VARS 128
-#define MAX_TOK 512
 
 #define	PROMPT_STRING	"(squash) % "
 

@@ -15,8 +15,8 @@
 
 
 typedef struct {
-	char name[30];
-	char value[30][30];
+	char name[LINEBUFFERSIZE];
+	char value[MAXTOKENS][LINEBUFFERSIZE];
 } VarDec;
 
 VarDec VarList[MAX_VARS];
@@ -48,7 +48,6 @@ int statusMessageHandler(pid_t pid, int status) {
 
 int execPipedCommandLine(char ** const tokens, int nTokens, int numPipes) {
 //Once it encounters the token '|' it should fork
-
 	int pipefds[2];
 	if (pipe(pipefds) < 0) {
 		perror("pipe");
@@ -66,8 +65,8 @@ int execPipedCommandLine(char ** const tokens, int nTokens, int numPipes) {
 	*/
 	int toksSincePipe = 0;
 	for (int i = 0; i < numPipes + 1; i++) {
-		char pipedCmd[1][100];
-		char *execCmd[100];
+		char pipedCmd[1][LINEBUFFERSIZE];
+		char *execCmd[LINEBUFFERSIZE];
 		int count = 0;
 
 		//Remember
@@ -141,7 +140,7 @@ int execPipedCommandLine(char ** const tokens, int nTokens, int numPipes) {
 
 int assignVariable(char ** const tokens, int nTokens, int tokPos) {
 	char *varName = tokens[tokPos-1];
-	char varValue[30][30];
+	char varValue[MAXTOKENS][LINEBUFFERSIZE];
 	int valueLength = nTokens - tokPos;
 	regex_t pattern;
 
@@ -181,11 +180,11 @@ int assignVariable(char ** const tokens, int nTokens, int tokPos) {
 	return 0;
 }
 
-char* subVariable(char holdToken[30], int start, int end) {
-		char varNameLookup[30];
-		char tmpStr[30];
-		char duplicateToken[30];
-		char holdBackHalf[30];
+char* subVariable(char holdToken[LINEBUFFERSIZE], int start, int end) {
+		char varNameLookup[LINEBUFFERSIZE];
+		char tmpStr[LINEBUFFERSIZE];
+		char duplicateToken[LINEBUFFERSIZE];
+		char holdBackHalf[LINEBUFFERSIZE];
 		int subIndex = -1;
 
 		start = start+2;
@@ -244,7 +243,7 @@ int execFullCommandLine(
 	int tokToSub = -1;
 	int confirmProperVar = 0;
 	int numVars = 0;
-	char holdToken[30];
+	char holdToken[LINEBUFFERSIZE];
 	int startOfVar = 0;
 	int endOfVar = 0;
 
