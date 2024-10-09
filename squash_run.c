@@ -32,7 +32,6 @@ static void prompt(FILE *pfp, FILE *ifp)
 }
 
 int statusMessageHandler(pid_t pid, int status) {
-printf("CHECK STATUS INT: %d\n", status);
 	if (WIFEXITED(status)) {
 		int exitStatus = WEXITSTATUS(status);
 			if (exitStatus == 0) {
@@ -43,7 +42,6 @@ printf("CHECK STATUS INT: %d\n", status);
 		} else {
 			printf("Child(%d) did not exit\n", pid);
 		}
-//		printf("Status: %d\n", pid);
 		return 0;
 }
 
@@ -139,11 +137,6 @@ int execPipedCommandLine(char ** const tokens, int nTokens, int numPipes) {
 			dup2(origIn, STDIN_FILENO);
 			dup2(origOut, STDOUT_FILENO);
 
-	// Exit status messages
-			int status;
-			waitpid(pid, &status, 0);
-//These freaks are not exiting properly, but piping does work
-printf("COMPARE STATUS INT: %d\n", status);
 			statusMessageHandler(pid, status);
 		}
 
