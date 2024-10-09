@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <ctype.h>
 
 #include "os_defs.h"
 
@@ -165,7 +166,7 @@ int assignVariable(char ** const tokens, int nTokens, int tokPos) {
 		strcpy(newVar.value[i], tokens[tokPos + 1]);
 		tokPos++;
 	}
-
+	strcpy(newVar.value[tokPos], "\0");
 	VarList[ListIndex] = newVar;
 	ListIndex++;
 	//quick
@@ -199,6 +200,8 @@ int execFullCommandLine(
 /** Now actually do something with this command, or command set */
 	//Output cmds broken up as "x" "y" "z"
 	int varAssign = 0;
+	int tokToSub = -1;
+	int confirmProperVar = 0;
 
 	for (int i = 0; i < nTokens; i++) {
 		if (i == nTokens-1) {
@@ -208,6 +211,17 @@ int execFullCommandLine(
 		}
 		if (strcmp(tokens[i], "=") == 0) {
 			varAssign = i;
+		}
+		for (int j = 0; j < strlen(tokens[i]); j++) {
+			if (tokens[i][j] == '$') {
+				if (tokens[i][j+1] == '{') {
+					tokToSub = i;
+				}
+			}
+			if (tokToSub > -1 && tokens[i][j] == '}') {
+				//track that closing brace was found
+				confirmProperVar = 1;
+			}
 		}
 	}
 	printf("\n");
@@ -219,10 +233,51 @@ int execFullCommandLine(
 		return 0;
 	}
 
+	if (tokToSub > -1 && confirmProperVar == 1) {
+		char varNameLookup[20];
+		char tmpStr[20];
+		char duplicateToken[20];
+		char holdBackHalf[20];
+		int start = 0;
+		int end = 0;
+		for (int i = 0; i < strlen(tokens[tokToSub]); i++) {
+			if (tokens[tokToSub][i] == '$') {
+				start = i + 2;
+			} if (tokens[tokToSub][i] == '}') {
+				end = i;
+			}
+		}
+		strcpy(duplicateToken, tokens[tokToSub]);
+		duplicateToken[strlen(duplicateToken) - end] = '\0';
+		strncpy(holdBackHalf, duplicateToken + end + 1, strlen(tokens[tokToSub]) - end);
+		tokens[tokToSub][end] = '\0';
+		strncpy(varNameLookup, tokens[tokToSub] + start, end - start + 1);
+		printf("TEST: %s\n", varNameLookup);
+
+		//LOOKUP
+		for (int i = 0; i < ListIndex; i++) {
+			if (strcmp(varNameLookup, VarList[i].name) == 0) {
+				strcpy(tmpStr, VarList[i].value[0]);
+				for (int j = 1; j < sizeof(VarList[i].value) / sizeof(char[20]); j++) {
+					if (strcmp(VarList[i].value[j], "\0") == 0) {
+						printf("BALLS\n");
+						break;
+					}
+					strcat(tmpStr, " ");
+					strcat(tmpStr, VarList[i].value[j]);
+				}
+				strcat(tmpStr, holdBackHalf);
+				tokens[tokToSub][start-2] = '\0';
+				strcat(tokens[tokToSub], tmpStr);
+			}
+		}
+	}
+
+
 	// Custom cmds
 	int numOfCmds = 2;
 	int manualNum = 0;
-	char* manualCmds[numOfCmds];
+	char *manualCmds[numOfCmds];
 	manualCmds[0] = "cd";
 	manualCmds[1] = "exit";
 
@@ -277,18 +332,6 @@ int execFullCommandLine(
 		int status;
 		waitpid(pid, &status, 0);
 		statusMessageHandler(pid, status);
-	/*if (WIFEXITED(status)) {
-			int exitStatus = WEXITSTATUS(status);
-			if (exitStatus == 0) {
-				printf("Child(%d) exited -- success (%d)\n", pid, exitStatus);
-			} else {
-				printf("Child(%d) exited -- failure (%d)\n", pid, exitStatus);
-			}
-		} else {
-			printf("Child(%d) did not exit", pid);
-		}
-		printf("Status: %d\n", pid);
-		return 0;*/
 	}
 
 	return 1;
