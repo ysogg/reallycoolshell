@@ -15,11 +15,11 @@
 
 
 typedef struct {
-	char name[20];
-	char value[20][20];
+	char name[30];
+	char value[30][30];
 } VarDec;
 
-VarDec VarList[128];
+VarDec VarList[MAX_VARS];
 int ListIndex = 0;
 
 /**
@@ -76,17 +76,11 @@ int execPipedCommandLine(char ** const tokens, int nTokens, int numPipes) {
 		for (int j = toksSincePipe; j < nTokens; j++) {
 			if (strcmp(tokens[j], "|") == 0 || strcmp(tokens[j], "\0") == 0) {
 				toksSincePipe=j+1;
-				//strcpy(pipedCmd[count], "\0");
-//				printf("%d\n", toksSincePipe);
 				break;
 			} else {
-//				strcpy(pipedCmd[count], tokens[j]);
-				//make pipedcmd one string->
 				strcat(pipedCmd[0], tokens[j]);
 				strcat(pipedCmd[0], " ");
 				toksSincePipe++;
-//				printf("%s \n", pipedCmd[count]);
-				//count++;
 			}
 		}
 
@@ -147,7 +141,7 @@ int execPipedCommandLine(char ** const tokens, int nTokens, int numPipes) {
 
 int assignVariable(char ** const tokens, int nTokens, int tokPos) {
 	char *varName = tokens[tokPos-1];
-	char varValue[20][20];
+	char varValue[30][30];
 	int valueLength = nTokens - tokPos;
 	regex_t pattern;
 
@@ -174,7 +168,7 @@ int assignVariable(char ** const tokens, int nTokens, int tokPos) {
 	VarList[ListIndex] = newVar;
 	ListIndex++;
 
-	printf("Testing save\n");
+/*	printf("Testing save\n");
 	for (int i = 0; i < ListIndex; i++) {
 		if (VarList[i].name != NULL) {
 			printf("%s: ", VarList[i].name);
@@ -183,34 +177,21 @@ int assignVariable(char ** const tokens, int nTokens, int tokPos) {
 			}
 			printf("\n");
 		}
-	}
+	}*/
 	return 0;
 }
 
 char* subVariable(char holdToken[30], int start, int end) {
-	//if (tokToSub > -1 && confirmProperVar == 1) {
-		char varNameLookup[20];
-		char tmpStr[20];
-		char duplicateToken[20];
-		char holdBackHalf[20];
-		//int start = 0;
-		//int end = 0;
+		char varNameLookup[30];
+		char tmpStr[30];
+		char duplicateToken[30];
+		char holdBackHalf[30];
 		int subIndex = -1;
-/*
-		for (int i = 0; i < strlen(tokens[tokToSub]); i++) {
-			if (tokens[tokToSub][i] == '$') {
-				start = i + 2;
-			} if (tokens[tokToSub][i] == '}') {
-				end = i;
-			}
-		}*/
+
 		start = start+2;
-		//all holdToken is where tokens[tokToSub] was
 		strcpy(duplicateToken, holdToken);
 		duplicateToken[strlen(duplicateToken) - end] = '\0';
-//printf("\n\nORIG HOLd TOKEN: %s %d\n", holdToken, end);
 		strncpy(holdBackHalf, holdToken + end + 1, strlen(holdToken) - end);
-//printf("\n\nORIG BACK HALF: %s\n", holdBackHalf);
 		holdToken[end] = '\0';
 		strncpy(varNameLookup, holdToken + start, end - start + 1);
 
@@ -229,7 +210,6 @@ char* subVariable(char holdToken[30], int start, int end) {
 				strcat(tmpStr, holdBackHalf);
 				holdToken[start-2] = '\0';
 				strcat(holdToken, tmpStr);
-//				printf("\nFUNC TEST: %s\n", holdToken);
 			}
 		}
 		if (subIndex == -1) {
@@ -240,7 +220,6 @@ char* subVariable(char holdToken[30], int start, int end) {
 			strcat(holdToken, "}");
 			strcat(holdToken, holdBackHalf);
 		}
-	//}
 
 	return holdToken;
 }
@@ -272,30 +251,23 @@ int execFullCommandLine(
 	for (int i = 0; i < nTokens; i++) {
 		if (strcmp(tokens[i], "=") == 0) {
 			varAssign = i;
+			break;
 		}
 	}
 
 	for (int i = 0; i < nTokens; i++) {
-		if (i == nTokens-1) {
-			printf("\"%s\"", tokens[i]);
-		} else {
-			printf("\"%s\" ", tokens[i]);
-		}
-		
 		if (varAssign == 0) {
 			for (int j = 0; j < strlen(tokens[i]); j++) {
 				if (tokens[i][j] == '$') {
 					if (tokens[i][j+1] == '{') {
 						startOfVar = j;
 						strcpy(holdToken, tokens[i]);
-						//tokToSub = i;
-					//}
+
 						for (int k = j; k < strlen(tokens[i]); k++) {
 							if (tokens[i][k] == '}') {
 								//Fill this var
 								endOfVar = k;
 								strcpy(holdToken, subVariable(holdToken, startOfVar, endOfVar));
-//								printf("\nTEST: %s\n", holdToken);
 								break;
 							}
 						}
@@ -306,13 +278,16 @@ int execFullCommandLine(
 				strcpy(tokens[i], holdToken);
 				strcpy(holdToken, "");
 				}
-				
-		/*		if (tokToSub > -1 && tokens[i][j] == '}') {
-					//track that closing brace was found
-					numVars++;
-					//confirmProperVar = 1;
-				}*/
 			}
+		}
+	}
+
+	//Output tokens in quotes
+	for (int i = 0; i < nTokens; i++) {
+		if (i == nTokens-1) {
+			printf("\"%s\"", tokens[i]);
+		} else {
+			printf("\"%s\" ", tokens[i]);
 		}
 	}
 	printf("\n");
@@ -348,20 +323,21 @@ int execFullCommandLine(
 			break;
 	}
 
-	//Setup pipe
+	//Setup for if cmdline has pipes
 	int numPipes = 0;
 	for (int i = 0; i < nTokens; i++) {
 		if (strcmp(tokens[i], "|") == 0) {
 			numPipes++;
 		}
 	}
+
 	if (numPipes > 0) {
 		execPipedCommandLine(tokens, nTokens, numPipes);
 		return 0;
 	}
 
 
-	//Fork everything else
+	//Fork everything else normally
 	pid_t pid = fork();
 	if (pid < 0) {
 		printf("\nFailed to fork :(\n");
