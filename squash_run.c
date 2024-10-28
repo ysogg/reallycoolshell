@@ -283,7 +283,8 @@ for (int i = 0; i < newLen; i++) {
 
 int globTest(int globTok, int nTokens) {
 	char** tokens = malloc(nTokens * sizeof(char*));
-	printf("TEST\n");
+	char** tokensBackup = malloc(nTokens * sizeof(char*));
+	tokensBackup = tokens; //may not need toksBackup, prob was just the loop, confirm later
 	loadTokens(tokens, nTokens, buffer, 0);
 
 	printf("Check tokens\n");
@@ -300,34 +301,52 @@ int globTest(int globTok, int nTokens) {
 	for (int i = 0; i < globbuf.gl_pathc; i++) {
 		printf("%s\n", globbuf.gl_pathv[i]);
 	}
+	
+	printf("Check tokens backup\n");
+	for (int i = 0; i < nTokens; i++) {
+		printf("toksb: %s\n", tokensBackup[i]);
+	}
 
+	printf("CHECK TOKS AT POS 0: %s\n", tokensBackup[0]);
+
+	//clear buf
+	*buffer = 0;
 	int newLen = nTokens-1 + globbuf.gl_pathc;
 	for (int i = 0; i < globTok; i++) {
-		if (i==0) memcpy(buffer, tokens[i], strlen(tokens[i]));
-		else {
+		if (i==0) {
+			printf("in buffer: %s\n", buffer);
+			printf("toks at i: %s\n", tokensBackup[i]);
+			printf("toks at 0: %s\n", tokensBackup[0]);
+			strcpy(buffer, tokensBackup[i]);
+			printf("aft buffer: %s\n", buffer);
+		} else {
 			strcat(buffer, " ");
-			strcat(buffer, tokens[i]);
+			strcat(buffer, tokensBackup[i]);
 		}
 	}
 
 	printf("curr buf: %s\n", buffer);
 
 	for (int i = 0; i < globbuf.gl_pathc; i++) {
+		strcat(buffer, " ");
 		strcat(buffer, globbuf.gl_pathv[i]);
 	}
 
 	printf("curr buf: %s\n", buffer);
-
-	for (int i = globTok; i < nTokens; i++) {
-		strcat(buffer, " ");
-		strcat(buffer, tokens[i]);
+	printf("CONFIRM nTokens: %d\n", nTokens);
+	if (globTok < nTokens-1) {
+		for (int i = globTok; i < nTokens-1; i++) {
+			strcat(buffer, " ");
+			strcat(buffer, tokensBackup[i]);
+		}
 	}
 
 	printf("CHECK\n");
 	for (int i = 0; i < nTokens; i++) {
-		printf("buf: %s\n", tokens[i]);
+		printf("tokens backup: %s\n", tokensBackup[i]);
 	}
-	printf("buf: %d\n", newLen);
+	printf("newlen#: %d\n", newLen);
+	printf("buf b4 return: %s\n", buffer);
 
 	return newLen;
 }
@@ -368,7 +387,7 @@ int execFullCommandLine(
 	printf("buf: %s\n", buffer);
 	// memcpy(buffer, tokensToString(buffer, LINEBUFFERSIZE, tokensCpy, 0), LINEBUFFERSIZE);
 	buffer = tokensToString(buffer, LINEBUFFERSIZE, tokens, 0);
-	printf("buf: %s\n", buffer);
+	printf("Orig buf: %s\n", buffer);
 	
 
 	for (int i = 0; i < nTokens; i++) {
