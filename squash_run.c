@@ -22,7 +22,7 @@ typedef struct {
 
 VarDec VarList[MAX_VARS];
 int ListIndex = 0;
-char *buffer;
+char buffer[LINEBUFFERSIZE];
 
 /**
  * Print a prompt if the input is coming from a TTY
@@ -229,124 +229,44 @@ char* subVariable(char holdToken[LINEBUFFERSIZE], int start, int end) {
 }
 
 // Shouldn't run on windows
-// Returns new list length
-char** insertGlobbedTokens(char ** tokens, int* nTokens, int globTok) {
-	/* FIX
-	 * Confirm what wildcards it needs to match for suresies
-	 * Doesn't work on second pass in same shell instance
-	*/
-	printf("glob tok %d\n", globTok);
-	printf("ntok: %d\n", (*nTokens));
-	glob_t globbuf;
-	glob(tokens[globTok], GLOB_DOOFFS, NULL, &globbuf);
-
-	for (int i = 0; i < globbuf.gl_pathc; i++) {
-		printf("%s\n", globbuf.gl_pathv[i]);
-	}
-
-	//Copy up to glob tok
-	int newLen = (*nTokens)-1 + globbuf.gl_pathc;
-	char** tempTokens = malloc(newLen * sizeof(char*));
-	printf("globo: %d\n", globTok);
-	for (int i = 0; i < globTok; i++) {
-		tempTokens[i] = (char*)malloc(strlen(tokens[i]+1));
-		strcpy(tempTokens[i], tokens[i]);
-		printf("t: %s\n", tempTokens[i]);
-	}
-
-	//Insert new tokens in place of globbed string
-	for (int i = 0; i < globbuf.gl_pathc; i++) {
-		tempTokens[globTok + i] = (char*)malloc(strlen(globbuf.gl_pathv[i]+1));
-		strcpy(tempTokens[globTok + i], globbuf.gl_pathv[i]);
-	}
-
-//doesn't work on a second pass
-	//Copy everything after glob tok
-	if (globTok != (*nTokens)-1) {
-		int count = 0;
-			for (int i = globTok+1; i < (*nTokens); i++) {
-				count++;
-				tempTokens[count + globbuf.gl_pathc] = (char*)malloc(strlen(tokens[i]+1));
-				strcpy(tempTokens[count + globbuf.gl_pathc], tokens[i]);
-			}
-	}
-
-for (int i = 0; i < newLen; i++) {
-		printf("Copied String: %s\n", tempTokens[i]);
-	}
-
-	globfree(&globbuf);
-
-	*nTokens = newLen;
-	return tempTokens;
-}
-
 int globTest(int globTok, int nTokens) {
-	char** tokens = malloc(nTokens * sizeof(char*));
-	char** tokensBackup = malloc(nTokens * sizeof(char*));
-	tokensBackup = tokens; //may not need toksBackup, prob was just the loop, confirm later
-	loadTokens(tokens, nTokens, buffer, 0);
+	char** tokens = malloc((nTokens+1) * sizeof(char*));
+	printf("Test\n");
+	loadTokens(tokens, 512, buffer, 0);
 
-	printf("Check tokens\n");
-	for (int i = 0; i < nTokens; i++) {
-		printf("toks: %s\n", tokens[i]);
+	char* tokensBackup[nTokens - globTok - 1];
+	for (int i = 0; i < nTokens - globTok - 1; i++) {
+		strcpy(tokensBackup[i], tokens[globTok + i + 1]);
 	}
-	printf("buf#: %d\n", nTokens);
 
 	glob_t globbuf;
-	printf("check tok: %s\n", tokens[globTok]);
 	glob(tokens[globTok], GLOB_DOOFFS, NULL, &globbuf);
 
-	printf("Check glob\n");
-	for (int i = 0; i < globbuf.gl_pathc; i++) {
-		printf("%s\n", globbuf.gl_pathv[i]);
-	}
-	
-	printf("Check tokens backup\n");
-	for (int i = 0; i < nTokens; i++) {
-		printf("toksb: %s\n", tokensBackup[i]);
-	}
-
-	printf("CHECK TOKS AT POS 0: %s\n", tokensBackup[0]);
-
-	//clear buf
-	*buffer = 0;
 	int newLen = nTokens-1 + globbuf.gl_pathc;
 	for (int i = 0; i < globTok; i++) {
 		if (i==0) {
-			printf("in buffer: %s\n", buffer);
-			printf("toks at i: %s\n", tokensBackup[i]);
-			printf("toks at 0: %s\n", tokensBackup[0]);
-			strcpy(buffer, tokensBackup[i]);
-			printf("aft buffer: %s\n", buffer);
+			strcpy(buffer, tokens[i]);
 		} else {
 			strcat(buffer, " ");
-			strcat(buffer, tokensBackup[i]);
+			strcat(buffer, tokens[i]);
 		}
 	}
-
-	printf("curr buf: %s\n", buffer);
 
 	for (int i = 0; i < globbuf.gl_pathc; i++) {
 		strcat(buffer, " ");
 		strcat(buffer, globbuf.gl_pathv[i]);
 	}
 
-	printf("curr buf: %s\n", buffer);
-	printf("CONFIRM nTokens: %d\n", nTokens);
+	printf("Test\n");
 	if (globTok < nTokens-1) {
-		for (int i = globTok; i < nTokens-1; i++) {
+		for (int i = 0; i < nTokens-1-globTok; i++) {
 			strcat(buffer, " ");
 			strcat(buffer, tokensBackup[i]);
 		}
 	}
+	strcat(buffer, "\n");
 
-	printf("CHECK\n");
-	for (int i = 0; i < nTokens; i++) {
-		printf("tokens backup: %s\n", tokensBackup[i]);
-	}
-	printf("newlen#: %d\n", newLen);
-	printf("buf b4 return: %s\n", buffer);
+	printf("buf b4 return: %s", buffer);
 
 	return newLen;
 }
@@ -375,19 +295,17 @@ int execFullCommandLine(
 	int startOfVar = 0;
 	int endOfVar = 0;
 
-	buffer = malloc(LINEBUFFERSIZE * sizeof(char));
-
+	strcpy(buffer, "");
 	//Make a copy of tokens so that globbing can modify token list
 	char** tokensCpy = malloc(nTokens * sizeof(char*));
 	for (int i = 0; i < nTokens; i++) {
 		tokensCpy[i] = (char*)malloc(strlen(tokens[i]+1));
 		strcpy(tokensCpy[i], tokens[i]);
-		printf("Copied String: %s\n", tokensCpy[i]);
 	}
-	printf("buf: %s\n", buffer);
 	// memcpy(buffer, tokensToString(buffer, LINEBUFFERSIZE, tokensCpy, 0), LINEBUFFERSIZE);
-	buffer = tokensToString(buffer, LINEBUFFERSIZE, tokens, 0);
-	printf("Orig buf: %s\n", buffer);
+	strcpy(buffer, tokensToString(buffer, LINEBUFFERSIZE, tokens, 0));
+	strcat(buffer, "\n");
+	printf("Orig buf: %s", buffer);
 	
 
 	for (int i = 0; i < nTokens; i++) {
@@ -400,11 +318,13 @@ int execFullCommandLine(
 	if (varAssign == 0) {
 		for (int i = 0; i < nTokens; i++) {
 			if (strstr(tokensCpy[i], "*") != NULL) {
-				// tokensCpy = insertGlobbedTokens(tokensCpy, &nTokens, i);
+				printf("Calling glob\n");
 				nTokens = globTest(i, nTokens);
-				printf("final buf: %s\n", buffer);
-				loadTokens(tokensCpy, nTokens, buffer, 0);
-				break;
+				printf("final buf: %s", buffer);
+				tokensCpy = malloc((nTokens+1) * sizeof(char*));
+				loadTokens(tokensCpy, 512, buffer, 0);
+				printf("PAST LOAD\n");
+				break; //should eventually be removed so you can check trailing after initial glob for more globs
 			}
 		}
 	}
@@ -495,6 +415,10 @@ int execFullCommandLine(
 		return 0;
 	}
 
+	printf("Check token list b4 exec\n");
+	for(int i = 0; i < nTokens; i++) {
+		printf("tok: %s\n", tokensCpy[i]);
+	}
 
 	//Fork everything else normally
 	pid_t pid = fork();
