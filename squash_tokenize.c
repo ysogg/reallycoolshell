@@ -171,7 +171,7 @@ getTokenFromBuffer(char **buffer, int *pushedChar)
  * If quotes were supported, this is where the handling
  * for them would go.
  */
-static int
+int
 loadTokens(char **tokens, int maxtokens, char *buf, int verbosity)
 {
 	char **loadp;

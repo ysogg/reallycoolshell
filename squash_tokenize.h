@@ -20,5 +20,7 @@ void fprintfTokens(FILE *fp, char ** const tokens, int useQuotes);
 
 char *tokensToString(char *buf, int bufsiz, char ** const tokens, int useQuotes);
 
+int loadTokens(char **tokens, int maxtokens, char *buf, int verbosity);
+
 #endif /* __SQUISH_TOKENIZE_HEADER__ */
 
