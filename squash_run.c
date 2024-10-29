@@ -23,6 +23,20 @@ typedef struct {
 VarDec VarList[MAX_VARS];
 int ListIndex = 0;
 char buffer[LINEBUFFERSIZE];
+int BG_Count = 0;
+
+/* TODO
+ * Glob:
+ * - Works for echo *.c
+ * - Fix
+ * Redirect:
+ * - Start
+ * BG:
+ * - Fix output to be in line with bash
+    -> This means cleaning up when executing another cmd
+ * Port:
+ * - Start
+*/
 
 /**
  * Print a prompt if the input is coming from a TTY
@@ -143,6 +157,58 @@ int execPipedCommandLine(char ** const tokens, int nTokens, int numPipes) {
 	return 1;
 }
 
+void catchBG() {
+	pid_t pid;
+	int status;
+	while (BG_Count > 0) {
+		pid = waitpid(-1, &status, 0);
+		if (pid > 0) {
+			BG_Count--;
+			printf("Ended bg\n");
+			statusMessageHandler(pid, status);
+		}
+	}
+}
+
+void runInBackground(char** tokens, int nTokens) {
+	BG_Count++;
+	pid_t pid = fork();
+	pid_t sub;
+	int status;
+
+	if (pid < 0) {
+		perror("fork");
+		return;
+	} else if (pid == 0) {
+		//nice to have
+		// if (BG_Count > 0) {
+		// 	waitpid(-1, &status, WNOHANG);
+		// }
+		
+		// printf("QUick\n");
+		// for (int i = 0; i < nTokens; i++) {
+		// 	printf("chk: %s\n", tokens[i]);
+		// }
+		
+		if (execvp(tokens[0], tokens) < 0) {
+			perror("exec");
+			exit(1);
+		} 
+		printf("\n");
+		// waitpid(-1, &status, WNOHANG);
+		exit(0);
+	} else {
+		// while (1) {
+		// 	sub = waitpid(-1, &status, WNOHANG);
+		// 	if (sub == 0 || sub == 1) {
+		// 		break;
+		// 	}
+		// }
+		// statusMessageHandler(pid, status);
+		//maybe while loop in parent signal handler may be overkill for this
+	}
+}
+
 int assignVariable(char ** const tokens, int nTokens, int tokPos) {
 	char *varName = tokens[tokPos-1];
 	char varValue[MAXTOKENS][LINEBUFFERSIZE];
@@ -229,46 +295,89 @@ char* subVariable(char holdToken[LINEBUFFERSIZE], int start, int end) {
 }
 
 // Shouldn't run on windows
-int globTest(int globTok, int nTokens) {
-	char** tokens = malloc((nTokens+1) * sizeof(char*));
-	printf("Test\n");
-	loadTokens(tokens, 512, buffer, 0);
+int globTest(char** tokens, int globTok, int nTokens) {
+	/*
+	* Copy up to globtok-1 into buffer
+	* Copy globbed shit into buffer
+	* Copy trailing into buffer
+	* copy newline into buffer
+	* tokenize
+	*/
+	// char** tokens = malloc((nTokens+1) * sizeof(char*));
+	// loadTokens(tokens, 512, buffer, 0);
+	strcpy(buffer, tokensToString(buffer, LINEBUFFERSIZE, tokens, 0));
+	strcat(buffer, "\n");
 
+	for (int i = 0; i < nTokens; i++) {
+		printf("tok: %s\n", tokens[i]);
+	}
 	char* tokensBackup[nTokens - globTok - 1];
-	for (int i = 0; i < nTokens - globTok - 1; i++) {
-		strcpy(tokensBackup[i], tokens[globTok + i + 1]);
+	// for (int i = 0; i < nTokens - globTok - 1; i++) {
+	// 	strcpy(tokensBackup[i], tokens[globTok + i + 1]);
+	// }
+
+	strcpy(buffer, tokens[0]);
+	for (int i = 1; i < globTok; i++) {
+		strcat(buffer, " ");
+		strcat(buffer, tokens[i]);
 	}
 
 	glob_t globbuf;
+	globbuf.gl_offs = 0;
 	glob(tokens[globTok], GLOB_DOOFFS, NULL, &globbuf);
 
+	// for (int i = 0; i < nTokens; i++) {
+	// 	printf("tok: %s\n", tokens[i]);
+	// }
+
 	int newLen = nTokens-1 + globbuf.gl_pathc;
-	for (int i = 0; i < globTok; i++) {
-		if (i==0) {
-			strcpy(buffer, tokens[i]);
-		} else {
-			strcat(buffer, " ");
-			strcat(buffer, tokens[i]);
-		}
-	}
+	// for (int i = 0; i < globTok; i++) {
+	// 	if (i==0) {
+	// 		strcpy(buffer, tokens[i]);
+	// 	} else {
+	// 		strcat(buffer, " ");
+	// 		strcat(buffer, tokens[i]);
+	// 	}
+	// }
+
+	printf("Check buf: %s\n", buffer);
 
 	for (int i = 0; i < globbuf.gl_pathc; i++) {
 		strcat(buffer, " ");
 		strcat(buffer, globbuf.gl_pathv[i]);
 	}
 
-	printf("Test\n");
-	if (globTok < nTokens-1) {
-		for (int i = 0; i < nTokens-1-globTok; i++) {
+	printf("Check buf2: %s\n", buffer);
+
+	if (globTok < (nTokens-1)) {
+		for (int i = globTok+1; i < (nTokens); i++) {
 			strcat(buffer, " ");
-			strcat(buffer, tokensBackup[i]);
+			strcat(buffer, tokens[i]);
 		}
 	}
 	strcat(buffer, "\n");
+	strcat(buffer, "\0");
 
 	printf("buf b4 return: %s", buffer);
+	loadTokens(tokens, 512, buffer, 0);
 
+	// tokens[newLen] = NULL;
+
+	globfree(&globbuf);
 	return newLen;
+}
+
+/*Redirection
+* if < make stdin given file descriptor
+ * if > make stdout given file descriptor
+ Valid redirect examples:
+ sort datafile.txt | grep magic > output.txt
+ sort | grep magic < datafile.txt
+ sort | grep magic < datafile.txt > output.txt
+ sort | grep magic > output.txt < datafile.txt
+*/
+void redirect(char** tokens, int direction, int pos) {
+
 }
 
 /**
@@ -302,12 +411,11 @@ int execFullCommandLine(
 		tokensCpy[i] = (char*)malloc(strlen(tokens[i]+1));
 		strcpy(tokensCpy[i], tokens[i]);
 	}
-	// memcpy(buffer, tokensToString(buffer, LINEBUFFERSIZE, tokensCpy, 0), LINEBUFFERSIZE);
-	strcpy(buffer, tokensToString(buffer, LINEBUFFERSIZE, tokens, 0));
-	strcat(buffer, "\n");
-	printf("Orig buf: %s", buffer);
+	// strcpy(buffer, tokensToString(buffer, LINEBUFFERSIZE, tokens, 0));
+	// strcat(buffer, "\n");
+	// printf("Orig buf: %s", buffer);
 	
-
+	// -- VAR ASSIGN -- //
 	for (int i = 0; i < nTokens; i++) {
 		if (strcmp(tokens[i], "=") == 0) {
 			varAssign = i;
@@ -315,25 +423,27 @@ int execFullCommandLine(
 		}
 	}
 
+	// printf("1\n");
+	// -- GLOB -- //
 	if (varAssign == 0) {
 		for (int i = 0; i < nTokens; i++) {
 			if (strstr(tokensCpy[i], "*") != NULL) {
 				printf("Calling glob\n");
-				nTokens = globTest(i, nTokens);
-				printf("final buf: %s", buffer);
-				tokensCpy = malloc((nTokens+1) * sizeof(char*));
-				loadTokens(tokensCpy, 512, buffer, 0);
+				//Loops works for multiple globs so long as it's not
+				// echo *.c *.c    for whatever reason
+				nTokens = globTest(tokensCpy, i, nTokens);
+				// printf("final buf: %s", buffer);
+				// tokensCpy = malloc((nTokens+1) * sizeof(char*));
+				// loadTokens(tokensCpy, 512, buffer, 0);
 				printf("PAST LOAD\n");
-				break; //should eventually be removed so you can check trailing after initial glob for more globs
+				// break; //should eventually be removed so you can check trailing after initial glob for more globs
 			}
 		}
 	}
 
-	for (int i = 0; i < nTokens; i++) {
-		printf("TEST: %s\n", tokensCpy[i]);
-	}
-	
+	// printf("2\n");
 
+	// -- VAR SUB -- //
 	for (int i = 0; i < nTokens; i++) {
 		if (varAssign == 0) {
 			for (int j = 0; j < strlen(tokensCpy[i]); j++) {
@@ -371,10 +481,30 @@ int execFullCommandLine(
 	}
 	printf("\n");
 
+	for (int i = 0; i < nTokens; i++) {
+		if (strcmp(tokensCpy[i], "<")) {
+			//stdin redir
+			redirect(tokensCpy, 0, i);
+		} else if (strcmp(tokensCpy[i], ">")) {
+			//stdout redir
+			redirect(tokensCpy, 1, i);
+		}
+	}
+	// redirect()
+
 	//Store vars as name string : token list with n elements
 	if (varAssign > 0) {
 		assignVariable(tokensCpy, nTokens, varAssign);
 		return 0;
+	}
+
+	//Check if it should be run in background process
+	int backgroundCheck = 0;
+	if (tokensCpy[nTokens-1][0] == '&' && strlen(tokensCpy[nTokens-1]) == 1) {
+		tokensCpy[nTokens-1] = NULL;
+		nTokens--;
+		runInBackground(tokensCpy, nTokens);
+		backgroundCheck = 1;
 	}
 
 
@@ -396,7 +526,8 @@ int execFullCommandLine(
 			chdir(tokensCpy[1]);
 			return 0;
 		case 2:
-			printf("Exiting...\n");
+			printf("Exiting...\n");	
+			catchBG();
 			exit(0);
 		default:
 			break;
@@ -415,32 +546,34 @@ int execFullCommandLine(
 		return 0;
 	}
 
-	printf("Check token list b4 exec\n");
-	for(int i = 0; i < nTokens; i++) {
-		printf("tok: %s\n", tokensCpy[i]);
-	}
+	// printf("Check token list b4 exec\n");
+	// for(int i = 0; i < nTokens; i++) {
+	// 	printf("tok: %s\n", tokensCpy[i]);
+	// }
 
 	//Fork everything else normally
-	pid_t pid = fork();
-	if (pid < 0) {
-		printf("\nFailed to fork :(\n");
-		perror("fork");
-		exit(1);
-	} else if (pid == 0) {
-		//Child
-		if (execvp(tokensCpy[0], tokensCpy) < 0) {
-			printf("\nCouldn't execute cmd\n");
-			perror("exec");
+	if (backgroundCheck == 0) {
+		pid_t pid = fork();
+		if (pid < 0) {
+			printf("\nFailed to fork :(\n");
+			perror("fork");
 			exit(1);
-		}
-		exit(0);
-	} else {
-		//Parent
+		} else if (pid == 0) {
+			//Child
+			if (execvp(tokensCpy[0], tokensCpy) < 0) {
+				printf("\nCouldn't execute cmd\n");
+				perror("exec");
+				exit(1);
+			}
+			exit(0);
+		} else {
+			//Parent
 
-		// Exit status messages
-		int status;
-		waitpid(pid, &status, 0);
-		statusMessageHandler(pid, status);
+			// Exit status messages
+			int status;
+			waitpid(pid, &status, 0);
+			statusMessageHandler(pid, status);
+		}
 	}
 
 	return 1;
