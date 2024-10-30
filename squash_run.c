@@ -2,18 +2,30 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <unistd.h>
+// #include <unistd.h>
 #include <sys/types.h>
-#include <sys/wait.h>
+// #include <sys/wait.h>
 #include <ctype.h>
-#include <regex.h>
-#include <glob.h>
+// #include <regex.h>
+// #include <glob.h>
 
 #include "os_defs.h"
 
 #include "squash_run.h"
 #include "squash_tokenize.h"
 
+#if defined ( OS_UNIX )
+#include <unistd.h>
+#include <sys/wait.h>
+#include <regex.h>
+#include <glob.h>
+#endif
+
+#if defined ( OS_WINDOWS )
+#include <windows.h>
+#include <stdio.h>
+#include <tchar.h>
+#endif
 
 typedef struct {
 	char name[LINEBUFFERSIZE];
@@ -27,15 +39,17 @@ int BG_Count = 0;
 
 /* TODO
  * Glob:
- * - Works for echo *.c
- * - Fix
- * Redirect:
- * - Start
+ * - Works for most stuff
+ * - Fix echo *.c *.c (segfault when looping over multiple times)
+ * Redirect: DONE
  * BG:
  * - Fix output to be in line with bash
     -> This means cleaning up when executing another cmd
  * Port:
- * - Start
+ * - Check if redirect works
+ * - Check if var sub works
+ * - Piped executables -> piping printsomething.exe into the other exe
+ * - Get BG to work
 */
 
 /**
@@ -48,6 +62,37 @@ static void prompt(FILE *pfp, FILE *ifp)
 	}
 }
 
+#if defined ( OS_WINDOWS )
+void winExec(char** tokens) {
+	STARTUPINFO si;
+    PROCESS_INFORMATION pi;
+
+	// ZeroMemory( &si, sizeof(si) );
+	memset(&si, 0, sizeof(STARTUPINFO));
+    si.cb = sizeof(si);
+    // ZeroMemory( &pi, sizeof(pi) );
+	memset(&pi, 0, sizeof(PROCESS_INFORMATION));
+
+	strcpy(buffer, "");
+	strcpy(buffer, tokensToString(buffer, LINEBUFFERSIZE, tokens, 0));
+
+	if (!CreateProcess(NULL, (LPSTR)buffer, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
+		printf("Create Process failed (%d)\n", GetLastError());
+		exit(1);
+	}
+
+	// if (!CreateProcess(NULL, (LPSTR)buffer, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
+	// 	printf("Create Process failed (%d)\n", GetLastError());
+	// 	exit(1);
+	// }
+//also need to run messagehandler for windows execs
+	WaitForSingleObject(pi.hProcess, INFINITE);
+	CloseHandle(pi.hProcess);
+	CloseHandle(pi.hThread);
+}
+#endif
+
+#if defined ( OS_UNIX )
 int statusMessageHandler(pid_t pid, int status) {
 	if (WIFEXITED(status)) {
 		int exitStatus = WEXITSTATUS(status);
@@ -208,7 +253,9 @@ void runInBackground(char** tokens, int nTokens) {
 		//maybe while loop in parent signal handler may be overkill for this
 	}
 }
+#endif
 
+#if defined ( OS_UNIX ) //only for regex, go in and adjust this func later
 int assignVariable(char ** const tokens, int nTokens, int tokPos) {
 	char *varName = tokens[tokPos-1];
 	char varValue[MAXTOKENS][LINEBUFFERSIZE];
@@ -250,6 +297,7 @@ int assignVariable(char ** const tokens, int nTokens, int tokPos) {
 	}*/
 	return 0;
 }
+#endif
 
 char* subVariable(char holdToken[LINEBUFFERSIZE], int start, int end) {
 		char varNameLookup[LINEBUFFERSIZE];
@@ -294,7 +342,7 @@ char* subVariable(char holdToken[LINEBUFFERSIZE], int start, int end) {
 	return holdToken;
 }
 
-// Shouldn't run on windows
+#if defined ( OS_UNIX )
 int globTest(char** tokens, int globTok, int nTokens) {
 	/*
 	* Copy up to globtok-1 into buffer
@@ -366,18 +414,26 @@ int globTest(char** tokens, int globTok, int nTokens) {
 	globfree(&globbuf);
 	return newLen;
 }
+#endif
 
-/*Redirection
-* if < make stdin given file descriptor
- * if > make stdout given file descriptor
- Valid redirect examples:
- sort datafile.txt | grep magic > output.txt
- sort | grep magic < datafile.txt
- sort | grep magic < datafile.txt > output.txt
- sort | grep magic > output.txt < datafile.txt
-*/
-void redirect(char** tokens, int direction, int pos) {
+void redirect(char** tokens, int direction ,int pos) {
+	FILE* fp; 
 
+	if (tokens[pos+1] != NULL) {
+		fp = fopen(tokens[pos+1], "r+");
+		if (fp == NULL) {
+			printf("Invalid filename at cmd: %d\n", pos+1);
+			exit(1);
+		}
+		if (direction == 0) {
+			dup2(fileno(fp), STDIN_FILENO);
+		} else if (direction == 1) {
+			dup2(fileno(fp), STDOUT_FILENO);
+		}
+		tokens[pos] = NULL;
+		tokens[pos+1] = NULL;
+	}
+	fclose(fp);
 }
 
 /**
@@ -404,13 +460,17 @@ int execFullCommandLine(
 	int startOfVar = 0;
 	int endOfVar = 0;
 
+	int origIn = dup(STDIN_FILENO);
+	int origOut = dup(STDOUT_FILENO);
+
 	strcpy(buffer, "");
 	//Make a copy of tokens so that globbing can modify token list
-	char** tokensCpy = malloc(nTokens * sizeof(char*));
+	char** tokensCpy = malloc((nTokens+1) * sizeof(char*));
 	for (int i = 0; i < nTokens; i++) {
 		tokensCpy[i] = (char*)malloc(strlen(tokens[i]+1));
 		strcpy(tokensCpy[i], tokens[i]);
 	}
+	tokensCpy[nTokens+1] = NULL;
 	// strcpy(buffer, tokensToString(buffer, LINEBUFFERSIZE, tokens, 0));
 	// strcat(buffer, "\n");
 	// printf("Orig buf: %s", buffer);
@@ -424,6 +484,8 @@ int execFullCommandLine(
 	}
 
 	// printf("1\n");
+	
+	#if defined ( OS_UNIX )
 	// -- GLOB -- //
 	if (varAssign == 0) {
 		for (int i = 0; i < nTokens; i++) {
@@ -436,13 +498,14 @@ int execFullCommandLine(
 				// tokensCpy = malloc((nTokens+1) * sizeof(char*));
 				// loadTokens(tokensCpy, 512, buffer, 0);
 				printf("PAST LOAD\n");
+				//recopy original token list back into glob list?
 				// break; //should eventually be removed so you can check trailing after initial glob for more globs
 			}
 		}
 	}
+	#endif
 
 	// printf("2\n");
-
 	// -- VAR SUB -- //
 	for (int i = 0; i < nTokens; i++) {
 		if (varAssign == 0) {
@@ -481,20 +544,12 @@ int execFullCommandLine(
 	}
 	printf("\n");
 
-	for (int i = 0; i < nTokens; i++) {
-		if (strcmp(tokensCpy[i], "<")) {
-			//stdin redir
-			redirect(tokensCpy, 0, i);
-		} else if (strcmp(tokensCpy[i], ">")) {
-			//stdout redir
-			redirect(tokensCpy, 1, i);
-		}
-	}
-	// redirect()
 
 	//Store vars as name string : token list with n elements
 	if (varAssign > 0) {
+		#if defined ( OS_UNIX )
 		assignVariable(tokensCpy, nTokens, varAssign);
+		#endif
 		return 0;
 	}
 
@@ -503,7 +558,9 @@ int execFullCommandLine(
 	if (tokensCpy[nTokens-1][0] == '&' && strlen(tokensCpy[nTokens-1]) == 1) {
 		tokensCpy[nTokens-1] = NULL;
 		nTokens--;
+		#if defined ( OS_UNIX )
 		runInBackground(tokensCpy, nTokens);
+		#endif
 		backgroundCheck = 1;
 	}
 
@@ -511,9 +568,9 @@ int execFullCommandLine(
 	// Custom cmds
 	int numOfCmds = 2;
 	int manualNum = 0;
-	char *manualCmds[numOfCmds];
-	manualCmds[0] = "cd";
-	manualCmds[1] = "exit";
+	char *manualCmds[2] = {"cd", "exit"};
+	// manualCmds[0] = "cd";
+	// manualCmds[1] = "exit";
 
 	for (int i = 0; i < numOfCmds; i++) {
 		if (strcmp(manualCmds[i], tokensCpy[0]) == 0) {
@@ -527,7 +584,9 @@ int execFullCommandLine(
 			return 0;
 		case 2:
 			printf("Exiting...\n");	
+			#if defined ( OS_UNIX )
 			catchBG();
+			#endif
 			exit(0);
 		default:
 			break;
@@ -541,8 +600,82 @@ int execFullCommandLine(
 		}
 	}
 
+	// -- Redirection -- //
+	int redirIn = 0;
+	int redirOut = 0;
+	int trackPipes = 0;
+	int updateNTokens = -1;
 	if (numPipes > 0) {
+		for (int i = 0; i < nTokens; i++) {
+			//Keep track of num pipes passed
+			if (strcmp(tokensCpy[i], "|")) {
+				trackPipes++;
+			} else {
+				if (strcmp(tokensCpy[i], "<") == 0) {
+					redirIn++;
+					//Redirect before pipe, improper format
+					if (trackPipes < numPipes) {
+						printf("Improper redirect format\n");
+						exit(1);
+					}
+					if (redirIn > 1) {
+						printf("Too many redirect chars\n");
+						exit(1);
+					} else {
+						if (updateNTokens == -1) updateNTokens = i-2;
+						redirect(tokensCpy, 0, i);
+						i++;
+					}
+				} else if (strcmp(tokensCpy[i], ">") == 0) {
+					redirOut++;
+					//Redirect before pipe, improper format
+					if (trackPipes < numPipes) {
+						printf("Improper redirect format\n");
+						exit(1);
+					}
+					if (redirOut > 1) {
+						printf("Too many redirect chars\n");
+						exit(1);
+					} else {
+						if (updateNTokens == -1) updateNTokens = i-2;
+						redirect(tokensCpy, 1, i);
+						i++;
+					}
+				}
+
+			}
+		}
+	} else {
+		for (int i = 0; i < nTokens; i++) {
+			if (strcmp(tokensCpy[i], "<") == 0) {
+				redirIn++;
+				if (redirIn > 1) {
+					printf("Too many redirect chars\n");
+					exit(1);
+				} else {
+					if (updateNTokens == -1) updateNTokens = i-2;
+					redirect(tokensCpy, 0, i);
+					i++;
+				}
+			} else if (strcmp(tokensCpy[i], ">") == 0) {
+				redirOut++;
+				if (redirOut > 1) {
+					printf("Too many redirect chars\n");
+					exit(1);
+				} else {
+					if (updateNTokens == -1) updateNTokens = i-2;
+					redirect(tokensCpy, 1, i);
+					i++;
+				}
+			}
+		}
+	}
+	nTokens = updateNTokens;
+
+	if (numPipes > 0) {
+		#if defined ( OS_UNIX )
 		execPipedCommandLine(tokensCpy, nTokens, numPipes);
+		#endif
 		return 0;
 	}
 
@@ -550,7 +683,7 @@ int execFullCommandLine(
 	// for(int i = 0; i < nTokens; i++) {
 	// 	printf("tok: %s\n", tokensCpy[i]);
 	// }
-
+	#if defined ( OS_UNIX )
 	//Fork everything else normally
 	if (backgroundCheck == 0) {
 		pid_t pid = fork();
@@ -570,11 +703,17 @@ int execFullCommandLine(
 			//Parent
 
 			// Exit status messages
+			dup2(origIn, STDIN_FILENO);
+			dup2(origOut, STDOUT_FILENO);
 			int status;
 			waitpid(pid, &status, 0);
 			statusMessageHandler(pid, status);
 		}
 	}
+	#endif
+	#if defined ( OS_WINDOWS )
+		winExec(tokens);
+	#endif
 
 	return 1;
 }

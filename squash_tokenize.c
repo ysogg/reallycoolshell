@@ -13,7 +13,7 @@
 #include "squash_tokenize.h"
 
 
-#if defined( OS_LINUX )
+#ifndef OS_DARWIN
 /* no definition of this in Debian yet */
 
 static size_t
