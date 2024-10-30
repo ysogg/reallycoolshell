@@ -376,76 +376,42 @@ char* subVariable(char holdToken[LINEBUFFERSIZE], int start, int end) {
 }
 
 #if defined ( OS_UNIX )
-int globTest(char** tokens, int globTok, int nTokens) {
-	/*
-	* Copy up to globtok-1 into buffer
-	* Copy globbed shit into buffer
-	* Copy trailing into buffer
-	* copy newline into buffer
-	* tokenize
-	*/
-	// char** tokens = malloc((nTokens+1) * sizeof(char*));
-	// loadTokens(tokens, 512, buffer, 0);
-	strcpy(buffer, tokensToString(buffer, LINEBUFFERSIZE, tokens, 0));
-	strcat(buffer, "\n");
-
-	for (int i = 0; i < nTokens; i++) {
-		printf("tok: %s\n", tokens[i]);
-	}
-	char* tokensBackup[nTokens - globTok - 1];
-	// for (int i = 0; i < nTokens - globTok - 1; i++) {
-	// 	strcpy(tokensBackup[i], tokens[globTok + i + 1]);
-	// }
-
-	strcpy(buffer, tokens[0]);
-	for (int i = 1; i < globTok; i++) {
-		strcat(buffer, " ");
-		strcat(buffer, tokens[i]);
-	}
-
+char** newGlob(char** tokens, int globPos, int nTokens, int* retLen) {
+	int newLen;
+	int numFills = 0;
+	
 	glob_t globbuf;
 	globbuf.gl_offs = 0;
-	glob(tokens[globTok], GLOB_DOOFFS, NULL, &globbuf);
+	glob(tokens[globPos], GLOB_DOOFFS, NULL, &globbuf);
 
-	// for (int i = 0; i < nTokens; i++) {
-	// 	printf("tok: %s\n", tokens[i]);
-	// }
-
-	int newLen = nTokens-1 + globbuf.gl_pathc;
-	// for (int i = 0; i < globTok; i++) {
-	// 	if (i==0) {
-	// 		strcpy(buffer, tokens[i]);
-	// 	} else {
-	// 		strcat(buffer, " ");
-	// 		strcat(buffer, tokens[i]);
-	// 	}
-	// }
-
-	printf("Check buf: %s\n", buffer);
-
-	for (int i = 0; i < globbuf.gl_pathc; i++) {
-		strcat(buffer, " ");
-		strcat(buffer, globbuf.gl_pathv[i]);
-	}
-
-	printf("Check buf2: %s\n", buffer);
-
-	if (globTok < (nTokens-1)) {
-		for (int i = globTok+1; i < (nTokens); i++) {
-			strcat(buffer, " ");
-			strcat(buffer, tokens[i]);
+	for (int i = 0; i < nTokens; i++) {
+		if (strcmp(tokens[i], tokens[globPos]) == 0) {
+			numFills++;
 		}
 	}
-	strcat(buffer, "\n");
-	strcat(buffer, "\0");
 
-	printf("buf b4 return: %s", buffer);
-	loadTokens(tokens, 512, buffer, 0);
+	newLen = ((nTokens-numFills) + (numFills * globbuf.gl_pathc));
 
-	// tokens[newLen] = NULL;
+	int tmpIndex = 0;
+	char** tmpTok = malloc(newLen * sizeof(char*));
+	for (int i = 0; i < nTokens; i++) {
+		if (strcmp(tokens[i], tokens[globPos]) == 0) {
+			for (int j = 0; j < globbuf.gl_pathc; j++) {
+				tmpTok[tmpIndex] = malloc((strlen(globbuf.gl_pathv[j])+1) * sizeof(char));
+				strcpy(tmpTok[tmpIndex], globbuf.gl_pathv[j]);
+				tmpIndex++;
+			}	
+		} else {
+			tmpTok[tmpIndex] = malloc((strlen(tokens[i])+1) * sizeof(char));
+			strcpy(tmpTok[tmpIndex], tokens[i]);
+			tmpIndex++;
+		}	
+	}
 
 	globfree(&globbuf);
-	return newLen;
+
+	*retLen = newLen;
+	return tmpTok;
 }
 #endif
 
@@ -500,17 +466,14 @@ int execFullCommandLine(
 	int origOut = dup(STDOUT_FILENO);
 	#endif
 
-	strcpy(buffer, "");
+	// strcpy(buffer, "");
 	//Make a copy of tokens so that globbing can modify token list
 	char** tokensCpy = malloc((nTokens+1) * sizeof(char*));
 	for (int i = 0; i < nTokens; i++) {
-		tokensCpy[i] = (char*)malloc(strlen(tokens[i]+1));
+		tokensCpy[i] = malloc((strlen(tokens[i])+1) * sizeof(char));
 		strcpy(tokensCpy[i], tokens[i]);
 	}
-	tokensCpy[nTokens+1] = NULL;
-	// strcpy(buffer, tokensToString(buffer, LINEBUFFERSIZE, tokens, 0));
-	// strcat(buffer, "\n");
-	// printf("Orig buf: %s", buffer);
+	tokensCpy[nTokens] = NULL;
 	
 	// -- VAR ASSIGN -- //
 	for (int i = 0; i < nTokens; i++) {
@@ -526,17 +489,27 @@ int execFullCommandLine(
 	// -- GLOB -- //
 	if (varAssign == 0) {
 		for (int i = 0; i < nTokens; i++) {
-			if (strstr(tokensCpy[i], "*") != NULL) {
-				printf("Calling glob\n");
-				//Loops works for multiple globs so long as it's not
-				// echo *.c *.c    for whatever reason
-				nTokens = globTest(tokensCpy, i, nTokens);
-				// printf("final buf: %s", buffer);
-				// tokensCpy = malloc((nTokens+1) * sizeof(char*));
-				// loadTokens(tokensCpy, 512, buffer, 0);
-				printf("PAST LOAD\n");
-				//recopy original token list back into glob list?
-				// break; //should eventually be removed so you can check trailing after initial glob for more globs
+			if ( (strstr(tokensCpy[i], "*") != NULL) || (strstr(tokensCpy[i], "?") != NULL) || 
+				(strstr(tokensCpy[i], "[") != NULL && strstr(tokensCpy[i], "]") != NULL)) {
+				// nTokens = newGlob(tokensCpy, i, nTokens);
+				int newLen;
+				char** tmpTok = newGlob(tokensCpy, i, nTokens, &newLen);
+
+				tokensCpy = realloc(tokensCpy, (newLen+1)*sizeof(char*));
+				for (int i = 0; i < newLen; i++) {
+					tokensCpy[i] = malloc((strlen(tmpTok[i])+1) * sizeof(char));
+					strcpy(tokensCpy[i], tmpTok[i]);
+				}
+				tokensCpy[newLen] = NULL;
+				nTokens = newLen;
+			
+			//Cleanup tmpTok mem
+			for (int i = 0; i < nTokens; i++) {
+				if (tmpTok[i] != NULL) {
+					free(tmpTok[i]);
+				}
+			}
+			free(tmpTok);
 			}
 		}
 	}
@@ -544,32 +517,32 @@ int execFullCommandLine(
 
 	// printf("2\n");
 	// -- VAR SUB -- //
-	for (int i = 0; i < nTokens; i++) {
-		if (varAssign == 0) {
-			for (int j = 0; j < strlen(tokensCpy[i]); j++) {
-				if (tokensCpy[i][j] == '$') {
-					if (tokensCpy[i][j+1] == '{') {
-						startOfVar = j;
-						strcpy(holdToken, tokensCpy[i]);
+	// for (int i = 0; i < nTokens; i++) {
+	// 	if (varAssign == 0) {
+	// 		for (int j = 0; j < strlen(tokensCpy[i]); j++) {
+	// 			if (tokensCpy[i][j] == '$') {
+	// 				if (tokensCpy[i][j+1] == '{') {
+	// 					startOfVar = j;
+	// 					strcpy(holdToken, tokensCpy[i]);
 
-						for (int k = j; k < strlen(tokensCpy[i]); k++) {
-							if (tokensCpy[i][k] == '}') {
-								//Fill this var
-								endOfVar = k;
-								strcpy(holdToken, subVariable(holdToken, startOfVar, endOfVar));
-								break;
-							}
-						}
-					} else {
-						printf("Bad variable substitution format\n");
-						return 1;
-					}
-				strcpy(tokensCpy[i], holdToken);
-				strcpy(holdToken, "");
-				}
-			}
-		}
-	}
+	// 					for (int k = j; k < strlen(tokensCpy[i]); k++) {
+	// 						if (tokensCpy[i][k] == '}') {
+	// 							//Fill this var
+	// 							endOfVar = k;
+	// 							strcpy(holdToken, subVariable(holdToken, startOfVar, endOfVar));
+	// 							break;
+	// 						}
+	// 					}
+	// 				} else {
+	// 					printf("Bad variable substitution format\n");
+	// 					return 1;
+	// 				}
+	// 			strcpy(tokensCpy[i], holdToken);
+	// 			strcpy(holdToken, "");
+	// 			}
+	// 		}
+	// 	}
+	// }
 
 	//Output tokens in quotes
 	for (int i = 0; i < nTokens; i++) {
@@ -737,12 +710,18 @@ int execFullCommandLine(
 			if (execvp(tokensCpy[0], tokensCpy) < 0) {
 				printf("\nCouldn't execute cmd\n");
 				perror("exec");
+				free(tokensCpy);
 				exit(1);
 			}
 			exit(0);
 		} else {
 			//Parent
-
+			for (int i = 0; i < nTokens; i++) {
+				if (tokensCpy[i] != NULL) {
+					free(tokensCpy[i]);
+				}
+			}
+			free(tokensCpy);
 			// Exit status messages
 			dup2(origIn, STDIN_FILENO);
 			dup2(origOut, STDOUT_FILENO);
