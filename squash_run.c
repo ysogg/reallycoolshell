@@ -38,11 +38,7 @@ char buffer[LINEBUFFERSIZE];
 int BG_Count = 0;
 
 /* TODO
- * Glob:
- * - Works for most stuff
- * - Fix echo *.c *.c (segfault when looping over multiple times)
- * - Also mem access issues I believe
- * - Add checks for glob chars other than * (I think ? and [])
+ * Glob: DONE
  * Redirect: DONE
  * BG:
  * - Fix output to be in line with bash
@@ -516,33 +512,33 @@ int execFullCommandLine(
 	#endif
 
 	// printf("2\n");
-	// -- VAR SUB -- //
-	// for (int i = 0; i < nTokens; i++) {
-	// 	if (varAssign == 0) {
-	// 		for (int j = 0; j < strlen(tokensCpy[i]); j++) {
-	// 			if (tokensCpy[i][j] == '$') {
-	// 				if (tokensCpy[i][j+1] == '{') {
-	// 					startOfVar = j;
-	// 					strcpy(holdToken, tokensCpy[i]);
+	//-- VAR SUB -- //
+	for (int i = 0; i < nTokens; i++) {
+		if (varAssign == 0) {
+			for (int j = 0; j < strlen(tokensCpy[i]); j++) {
+				if (tokensCpy[i][j] == '$') {
+					if (tokensCpy[i][j+1] == '{') {
+						startOfVar = j;
+						strcpy(holdToken, tokensCpy[i]);
 
-	// 					for (int k = j; k < strlen(tokensCpy[i]); k++) {
-	// 						if (tokensCpy[i][k] == '}') {
-	// 							//Fill this var
-	// 							endOfVar = k;
-	// 							strcpy(holdToken, subVariable(holdToken, startOfVar, endOfVar));
-	// 							break;
-	// 						}
-	// 					}
-	// 				} else {
-	// 					printf("Bad variable substitution format\n");
-	// 					return 1;
-	// 				}
-	// 			strcpy(tokensCpy[i], holdToken);
-	// 			strcpy(holdToken, "");
-	// 			}
-	// 		}
-	// 	}
-	// }
+						for (int k = j; k < strlen(tokensCpy[i]); k++) {
+							if (tokensCpy[i][k] == '}') {
+								//Fill this var
+								endOfVar = k;
+								strcpy(holdToken, subVariable(holdToken, startOfVar, endOfVar));
+								break;
+							}
+						}
+					} else {
+						printf("Bad variable substitution format\n");
+						return 1;
+					}
+				strcpy(tokensCpy[i], holdToken);
+				strcpy(holdToken, "");
+				}
+			}
+		}
+	}
 
 	//Output tokens in quotes
 	for (int i = 0; i < nTokens; i++) {
