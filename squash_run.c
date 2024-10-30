@@ -494,6 +494,48 @@ void redirection(char** tokens, int direction ,int pos) {
 	fclose(fp);
 }
 #endif
+#if defined ( OS_WINDOWS )
+void winRedirection(char** tokens, int direction, int pos) {
+	STARTUPINFO si;
+	PROCESS_INFORMATION pi;
+	SECURITY_ATTRIBUTES fileSec = { sizeof(SECURITY_ATTRIBUTES), NULL, TRUE };
+	HANDLE fileIn, fileOut;
+
+	memset(&pi, 0, sizeof(STARTUPINFO));
+	si.cb = sizeof(STARTUPINFO);
+	si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+	si.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+	si.dwFlags = 0 | STARTF_USESTDHANDLES;
+	memset(&pi, 0, sizeof(PROCESS_INFORMATION));
+
+	if (tokens[pos+1] != NULL) {
+		// HANDLE fp = CreateFile(tokens[pos+1], GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, &fileSec, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL || FILE_ATTRIBUTE_READONLY, NULL);
+		// fp = fopen(tokens[pos+1], "r+");
+		// if (fp == NULL) {
+		// 	printf("Invalid filename at cmd: %d\n", pos+1);
+		// 	exit(1);
+		// }
+		
+		if (direction == 0) {
+			fileIn = CreateFile(tokens[pos+1], GENERIC_READ, 0, &fileSec, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
+			// dup2(fileno(fp), STDIN_FILENO);
+			// SetStdHandle(STD_INPUT_HANDLE, fp);
+			si.hStdInput = fileIn;
+		} else if (direction == 1) {
+			// dup2(fileno(fp), STDOUT_FILENO);
+			fileOut = CreateFile(tokens[pos+1], GENERIC_WRITE, FILE_SHARE_WRITE, &fileSec, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+			si.hStdOutput = fileOut;
+			// SetStdHandle(STD_OUTPUT_HANDLE, fileOut);
+		}
+		tokens[pos] = NULL;
+		tokens[pos+1] = NULL;
+		// CloseHandle(fileIn);
+		// CloseHandle(fileOut);
+	}
+	// fclose(fp);
+	
+}
+#endif
 
 /**
  * Actually do the work
@@ -693,7 +735,12 @@ int execFullCommandLine(
 						exit(1);
 					} else {
 						if (updateNTokens == -1) updateNTokens = i-2;
+						#if defined ( OS_UNIX )
 						redirection(tokensCpy, 0, i);
+						#endif
+						#if defined ( OS_WINDOWS )
+						winRedirection(tokensCpy, 0, i);
+						#endif
 						i++;
 					}
 				} else if (strcmp(tokensCpy[i], ">") == 0) {
@@ -708,7 +755,12 @@ int execFullCommandLine(
 						exit(1);
 					} else {
 						if (updateNTokens == -1) updateNTokens = i-2;
+						#if defined ( OS_UNIX )
 						redirection(tokensCpy, 1, i);
+						#endif
+						#if defined ( OS_WINDOWS )
+						winRedirection(tokensCpy, 1, i);
+						#endif
 						i++;
 					}
 				}
@@ -724,7 +776,12 @@ int execFullCommandLine(
 					exit(1);
 				} else {
 					if (updateNTokens == -1) updateNTokens = i-2;
+					#if defined ( OS_UNIX )
 					redirection(tokensCpy, 0, i);
+					#endif
+					#if defined ( OS_WINDOWS )
+					winRedirection(tokensCpy, 0, i);
+					#endif
 					i++;
 				}
 			} else if (strcmp(tokensCpy[i], ">") == 0) {
@@ -734,7 +791,12 @@ int execFullCommandLine(
 					exit(1);
 				} else {
 					if (updateNTokens == -1) updateNTokens = i-2;
+					#if defined ( OS_UNIX )
 					redirection(tokensCpy, 1, i);
+					#endif
+					#if defined ( OS_WINDOWS )
+					winRedirection(tokensCpy, 1, i);
+					#endif
 					i++;
 				}
 			}
