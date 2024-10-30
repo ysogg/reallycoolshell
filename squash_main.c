@@ -121,8 +121,10 @@ main(int argc, char **argv)
 						optarg, strerror(errno));
 				exit(-1);
 			}
+      #if defined ( OS_UNIX )
       dup2(fileno(ofp), STDOUT_FILENO);
-			break;
+			#endif
+      break;
 
 		case '?':
 		case 'h':

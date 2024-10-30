@@ -76,15 +76,16 @@ void winExec(char** tokens) {
 	strcpy(buffer, "");
 	strcpy(buffer, tokensToString(buffer, LINEBUFFERSIZE, tokens, 0));
 
-	if (!CreateProcess(NULL, (LPSTR)buffer, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
-		printf("Create Process failed (%d)\n", GetLastError());
-		exit(1);
-	}
-
-	// if (!CreateProcess(NULL, (LPSTR)buffer, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
+//background?
+	// if (!CreateProcess(NULL, (LPSTR)buffer, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
 	// 	printf("Create Process failed (%d)\n", GetLastError());
 	// 	exit(1);
 	// }
+
+	if (!CreateProcess(NULL, (LPSTR)buffer, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
+		printf("Create Process failed (%d)\n", GetLastError());
+		exit(1);
+	}
 //also need to run messagehandler for windows execs
 	WaitForSingleObject(pi.hProcess, INFINITE);
 	CloseHandle(pi.hProcess);
@@ -416,6 +417,7 @@ int globTest(char** tokens, int globTok, int nTokens) {
 }
 #endif
 
+#if defined ( OS_UNIX )
 void redirect(char** tokens, int direction ,int pos) {
 	FILE* fp; 
 
@@ -435,6 +437,7 @@ void redirect(char** tokens, int direction ,int pos) {
 	}
 	fclose(fp);
 }
+#endif
 
 /**
  * Actually do the work
@@ -460,8 +463,10 @@ int execFullCommandLine(
 	int startOfVar = 0;
 	int endOfVar = 0;
 
+	#if defined ( OS_UNIX )
 	int origIn = dup(STDIN_FILENO);
 	int origOut = dup(STDOUT_FILENO);
+	#endif
 
 	strcpy(buffer, "");
 	//Make a copy of tokens so that globbing can modify token list
@@ -600,6 +605,7 @@ int execFullCommandLine(
 		}
 	}
 
+	#if defined ( OS_UNIX )
 	// -- Redirection -- //
 	int redirIn = 0;
 	int redirOut = 0;
@@ -670,7 +676,10 @@ int execFullCommandLine(
 			}
 		}
 	}
-	nTokens = updateNTokens;
+	if (updateNTokens != -1) {
+		nTokens = updateNTokens;
+	}
+	#endif
 
 	if (numPipes > 0) {
 		#if defined ( OS_UNIX )
