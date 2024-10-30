@@ -41,6 +41,7 @@ int BG_Count = 0;
  * Glob:
  * - Works for most stuff
  * - Fix echo *.c *.c (segfault when looping over multiple times)
+ * - Also mem access issues I believe
  * Redirect: DONE
  * BG:
  * - Fix output to be in line with bash
@@ -418,7 +419,7 @@ int globTest(char** tokens, int globTok, int nTokens) {
 #endif
 
 #if defined ( OS_UNIX )
-void redirect(char** tokens, int direction ,int pos) {
+void redirection(char** tokens, int direction ,int pos) {
 	FILE* fp; 
 
 	if (tokens[pos+1] != NULL) {
@@ -629,7 +630,7 @@ int execFullCommandLine(
 						exit(1);
 					} else {
 						if (updateNTokens == -1) updateNTokens = i-2;
-						redirect(tokensCpy, 0, i);
+						redirection(tokensCpy, 0, i);
 						i++;
 					}
 				} else if (strcmp(tokensCpy[i], ">") == 0) {
@@ -644,7 +645,7 @@ int execFullCommandLine(
 						exit(1);
 					} else {
 						if (updateNTokens == -1) updateNTokens = i-2;
-						redirect(tokensCpy, 1, i);
+						redirection(tokensCpy, 1, i);
 						i++;
 					}
 				}
@@ -660,7 +661,7 @@ int execFullCommandLine(
 					exit(1);
 				} else {
 					if (updateNTokens == -1) updateNTokens = i-2;
-					redirect(tokensCpy, 0, i);
+					redirection(tokensCpy, 0, i);
 					i++;
 				}
 			} else if (strcmp(tokensCpy[i], ">") == 0) {
@@ -670,7 +671,7 @@ int execFullCommandLine(
 					exit(1);
 				} else {
 					if (updateNTokens == -1) updateNTokens = i-2;
-					redirect(tokensCpy, 1, i);
+					redirection(tokensCpy, 1, i);
 					i++;
 				}
 			}
