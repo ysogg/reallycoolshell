@@ -42,13 +42,14 @@ int BG_Count = 0;
  * - Works for most stuff
  * - Fix echo *.c *.c (segfault when looping over multiple times)
  * - Also mem access issues I believe
+ * - Add checks for glob chars other than * (I think ? and [])
  * Redirect: DONE
  * BG:
  * - Fix output to be in line with bash
     -> This means cleaning up when executing another cmd
  * Port:
  * - Check if redirect works
- * - Check if var sub works
+ * - Check if var sub works (only diff should be no regex.h on win)
  * - Piped executables -> piping printsomething.exe into the other exe
  * - Get BG to work
 */
@@ -68,10 +69,8 @@ void winExec(char** tokens) {
 	STARTUPINFO si;
     PROCESS_INFORMATION pi;
 
-	// ZeroMemory( &si, sizeof(si) );
 	memset(&si, 0, sizeof(STARTUPINFO));
     si.cb = sizeof(si);
-    // ZeroMemory( &pi, sizeof(pi) );
 	memset(&pi, 0, sizeof(PROCESS_INFORMATION));
 
 	strcpy(buffer, "");
@@ -91,6 +90,38 @@ void winExec(char** tokens) {
 	WaitForSingleObject(pi.hProcess, INFINITE);
 	CloseHandle(pi.hProcess);
 	CloseHandle(pi.hThread);
+}
+
+//UNFINISHED
+int winPipedExec(char ** tokens, int nTokens, int numPipes) {
+	STARTUPINFO si;
+    PROCESS_INFORMATION pi;
+
+	memset(&si, 0, sizeof(STARTUPINFO));
+    si.cb = sizeof(si);
+	memset(&pi, 0, sizeof(PROCESS_INFORMATION));
+
+	strcpy(buffer, "");
+	strcpy(buffer, tokensToString(buffer, LINEBUFFERSIZE, tokens, 0));
+
+
+	HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
+	HANDLE hStdout = GetStdHandle(STD_OUTPUT_HANDLE);
+
+	for (int i = 0; i < numPipes + 1; i++) {
+		//Create temp buffer with current command to pipe
+		//That command's output should get passed to next pipe
+		char pipedCmd[LINEBUFFERSIZE];
+		char execCmd[LINEBUFFERSIZE];
+		int count = 0;
+
+	}
+
+	//CloseHandle(process)
+	SetStdHandle(STD_INPUT_HANDLE, hStdin);
+	SetStdHandle(STD_OUTPUT_HANDLE, hStdout);
+
+	return 1;
 }
 #endif
 
