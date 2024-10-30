@@ -46,7 +46,6 @@ int BG_Count = 0;
  * Port:
  * - Check if redirect works
  * - Check if var sub works (only diff should be no regex.h on win)
- * - Piped executables -> piping printsomething.exe into the other exe
  * - Get BG to work
 */
 
@@ -82,41 +81,103 @@ void winExec(char** tokens) {
 		printf("Create Process failed (%d)\n", GetLastError());
 		exit(1);
 	}
-//also need to run messagehandler for windows execs
 	WaitForSingleObject(pi.hProcess, INFINITE);
+	
+	DWORD exitStatus;
+	if (GetExitCodeProcess(pi.hProcess, (LPDWORD)&exitStatus)) {
+		if (exitStatus == 0) {
+			printf("Child(%d) exited -- success (%d)\n", pi.dwProcessId, (int)exitStatus);
+		} else if (exitStatus != 0) {
+			printf("Child(%d) exited -- failure (%d)\n", pi.dwProcessId, (int)exitStatus);
+		}
+	} else {
+		printf("Child(%d) did not exit (crashed?)\n", pi.dwProcessId);
+	}
+
 	CloseHandle(pi.hProcess);
 	CloseHandle(pi.hThread);
 }
 
 //UNFINISHED
 int winPipedExec(char ** tokens, int nTokens, int numPipes) {
-	STARTUPINFO si;
-    PROCESS_INFORMATION pi;
-
-	memset(&si, 0, sizeof(STARTUPINFO));
-    si.cb = sizeof(si);
-	memset(&pi, 0, sizeof(PROCESS_INFORMATION));
-
-	strcpy(buffer, "");
-	strcpy(buffer, tokensToString(buffer, LINEBUFFERSIZE, tokens, 0));
+	STARTUPINFO siOne;
+    PROCESS_INFORMATION piOne;
+	BOOL status;
+	HANDLE hPipeRead, hPipeWrite;
+	SECURITY_ATTRIBUTES pipeSA = { sizeof(SECURITY_ATTRIBUTES), NULL, TRUE };
 
 
-	HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
-	HANDLE hStdout = GetStdHandle(STD_OUTPUT_HANDLE);
-
+	int toksSincePipe = 0;
 	for (int i = 0; i < numPipes + 1; i++) {
-		//Create temp buffer with current command to pipe
-		//That command's output should get passed to next pipe
-		char pipedCmd[LINEBUFFERSIZE];
+		memset(&siOne, 0, sizeof(STARTUPINFO));
+		siOne.cb = sizeof(STARTUPINFO);
+		siOne.dwFlags = 0 | STARTF_USESTDHANDLES;
+		siOne.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+		siOne.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+		siOne.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+		memset(&piOne, 0, sizeof(PROCESS_INFORMATION));
+
+		char pipedCmd[1][LINEBUFFERSIZE];
 		char execCmd[LINEBUFFERSIZE];
 		int count = 0;
+		
+		//Remember
+		strcpy(pipedCmd[0], "");
 
+		for (int j = toksSincePipe; j < nTokens; j++) {
+			if (strcmp(tokens[j], "|") == 0 || strcmp(tokens[j], "\0") == 0) {
+				toksSincePipe=j+1;
+				break;
+			} else {
+				strcat(pipedCmd[0], tokens[j]);
+				strcat(pipedCmd[0], " ");
+				toksSincePipe++;
+			}
+		}
+
+		if (i == 0) {
+			status = CreatePipe(&hPipeRead, &hPipeWrite, &pipeSA, 0);
+			// CloseHandle(hPipeWrite);
+			siOne.hStdOutput = hPipeWrite;
+		} else if (i == numPipes) {
+			CloseHandle(hPipeWrite);
+			siOne.hStdInput = hPipeRead;
+		} else {
+			siOne.hStdInput = hPipeRead;
+			CloseHandle(hPipeWrite);
+			status = CreatePipe(&hPipeRead, &hPipeWrite, &pipeSA, 0);
+		}
+
+		if (!status) {
+			fprintf(stderr, "Error: CreatePipe failed -- error %lu: %s\n", GetLastError(), strerror(GetLastError()));
+			return -1;
+		}
+
+		fprintf(stderr, "cmd: %s\n", pipedCmd);
+		
+		//Create process:
+		if ( !CreateProcess(NULL, (LPSTR)pipedCmd, NULL, NULL, TRUE, 0, NULL, NULL, &siOne, &piOne)) {
+			fprintf(stderr, "Create Process failed (%d)\n", GetLastError());
+			exit(1);
+		}
+		
+	}
+	CloseHandle(hPipeRead);
+	WaitForSingleObject(piOne.hProcess, INFINITE);
+
+	DWORD exitStatus;
+	if (GetExitCodeProcess(piOne.hProcess, (LPDWORD)&exitStatus)) {
+		if (exitStatus == 0) {
+			printf("Child(%d) exited -- success (%d)\n", piOne.dwProcessId, (int)exitStatus);
+		} else if (exitStatus != 0) {
+			printf("Child(%d) exited -- failure (%d)\n", piOne.dwProcessId, (int)exitStatus);
+		}
+	} else {
+		printf("Child(%d) did not exit (crashed?)\n", piOne.dwProcessId);
 	}
 
-	//CloseHandle(process)
-	SetStdHandle(STD_INPUT_HANDLE, hStdin);
-	SetStdHandle(STD_OUTPUT_HANDLE, hStdout);
-
+	CloseHandle(piOne.hProcess);
+	CloseHandle(piOne.hThread);
 	return 1;
 }
 #endif
@@ -284,11 +345,12 @@ void runInBackground(char** tokens, int nTokens) {
 }
 #endif
 
-#if defined ( OS_UNIX ) //only for regex, go in and adjust this func later
+
 int assignVariable(char ** const tokens, int nTokens, int tokPos) {
 	char *varName = tokens[tokPos-1];
 	char varValue[MAXTOKENS][LINEBUFFERSIZE];
 	int valueLength = nTokens - tokPos;
+	#if defined ( OS_UNIX )
 	regex_t pattern;
 
 	if (regcomp(&pattern, "[A-Za-z_][A-Za-z0-9_]*", 0) != 0) {
@@ -300,6 +362,7 @@ int assignVariable(char ** const tokens, int nTokens, int tokPos) {
 		printf("\nbad variable name\n");
 		return 1;
 	}
+	#endif
 
 	VarDec newVar;
 	strcpy(newVar.name, varName);
@@ -313,20 +376,19 @@ int assignVariable(char ** const tokens, int nTokens, int tokPos) {
 	strcpy(newVar.value[tokPos], "\0");
 	VarList[ListIndex] = newVar;
 	ListIndex++;
-
-/*	printf("Testing save\n");
-	for (int i = 0; i < ListIndex; i++) {
-		if (VarList[i].name != NULL) {
-			printf("%s: ", VarList[i].name);
-			for (int j = 0; j < valueLength; j++) {
-				printf("%s ", VarList[i].value[j]);
-			}
-			printf("\n");
-		}
-	}*/
 	return 0;
+
+	// fprintf(stderr, "Testing save\n");
+	// for (int i = 0; i < ListIndex; i++) {
+	// 	if (VarList[i].name != NULL) {
+	// 		printf("%s: ", VarList[i].name);
+	// 		for (int j = 0; j < valueLength; j++) {
+	// 			printf("%s ", VarList[i].value[j]);
+	// 		}
+	// 		printf("\n");
+	// 	}
+	// }
 }
-#endif
 
 char* subVariable(char holdToken[LINEBUFFERSIZE], int start, int end) {
 		char varNameLookup[LINEBUFFERSIZE];
@@ -553,9 +615,10 @@ int execFullCommandLine(
 
 	//Store vars as name string : token list with n elements
 	if (varAssign > 0) {
-		#if defined ( OS_UNIX )
+		// #if defined ( OS_UNIX )
+		fprintf(stderr, "TEST1\n");
 		assignVariable(tokensCpy, nTokens, varAssign);
-		#endif
+		// #endif
 		return 0;
 	}
 
@@ -685,6 +748,9 @@ int execFullCommandLine(
 	if (numPipes > 0) {
 		#if defined ( OS_UNIX )
 		execPipedCommandLine(tokensCpy, nTokens, numPipes);
+		#endif
+		#if defined ( OS_WINDOWS )
+		winPipedExec(tokensCpy, nTokens, numPipes);
 		#endif
 		return 0;
 	}
