@@ -13,38 +13,38 @@
 #include "squash_tokenize.h"
 
 
-#ifndef OS_DARWIN
-/* no definition of this in Debian yet */
+// #ifndef OS_DARWIN
+// /* no definition of this in Debian yet */
 
-static size_t
-strlcat(char *dest, const char *src, size_t bufferSize)
-{
-	size_t currentSize = strnlen(dest, bufferSize);
-	size_t maxNtoCopy = bufferSize - currentSize;
-	size_t nCopied;
+// static size_t
+// strlcat(char *dest, const char *src, size_t bufferSize)
+// {
+// 	size_t currentSize = strnlen(dest, bufferSize);
+// 	size_t maxNtoCopy = bufferSize - currentSize;
+// 	size_t nCopied;
 
-	for (nCopied = 0 ; nCopied < maxNtoCopy && src[nCopied] != '\0' ; nCopied++)
-		dest[currentSize + nCopied] = src[nCopied];
+// 	for (nCopied = 0 ; nCopied < maxNtoCopy && src[nCopied] != '\0' ; nCopied++)
+// 		dest[currentSize + nCopied] = src[nCopied];
 
-	dest[currentSize + nCopied] = '\0';
+// 	dest[currentSize + nCopied] = '\0';
 
-	return currentSize + nCopied;
-}
+// 	return currentSize + nCopied;
+// }
 
-static size_t
-strlcpy(char *dest, const char *src, size_t bufferSize)
-{
-	size_t nCopied;
+// static size_t
+// strlcpy(char *dest, const char *src, size_t bufferSize)
+// {
+// 	size_t nCopied;
 
-	for (nCopied = 0 ; nCopied < bufferSize && src[nCopied] != '\0' ; nCopied++)
-		dest[nCopied] = src[nCopied];
+// 	for (nCopied = 0 ; nCopied < bufferSize && src[nCopied] != '\0' ; nCopied++)
+// 		dest[nCopied] = src[nCopied];
 
-	dest[nCopied] = '\0';
+// 	dest[nCopied] = '\0';
 
-	return nCopied;
-}
+// 	return nCopied;
+// }
 
-#endif
+// #endif
 
 
 
