@@ -1,3 +1,11 @@
+# COOL Assignment from Systems Programming Class
+Course schedule/workload was kind of weird so didn't get as much time as I wanted to work on this.
+TODO:
+- No more windows :)
+- Update README
+- Remove class/assignment things
+- Fix existing linux code (some things aren't proeprly tested for edge cases and most things will likely not work in combination with other functions). Going to leave the Darwin stuff in, should work for now but going forward it will likely be removed.
+- Secret other bullet point ?
 
 # IPC in the Shell using Pipes
 
