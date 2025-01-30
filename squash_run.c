@@ -21,12 +21,6 @@
 #include <glob.h>
 #endif
 
-#if defined ( OS_WINDOWS )
-#include <windows.h>
-#include <stdio.h>
-#include <tchar.h>
-#endif
-
 typedef struct {
 	char name[LINEBUFFERSIZE];
 	char value[MAXTOKENS][LINEBUFFERSIZE];
@@ -58,129 +52,6 @@ static void prompt(FILE *pfp, FILE *ifp)
 		fputs(PROMPT_STRING, pfp);
 	}
 }
-
-#if defined ( OS_WINDOWS )
-void winExec(char** tokens) {
-	STARTUPINFO si;
-    PROCESS_INFORMATION pi;
-
-	memset(&si, 0, sizeof(STARTUPINFO));
-    si.cb = sizeof(si);
-	memset(&pi, 0, sizeof(PROCESS_INFORMATION));
-
-	strcpy(buffer, "");
-	strcpy(buffer, tokensToString(buffer, LINEBUFFERSIZE, tokens, 0));
-
-//background?
-	// if (!CreateProcess(NULL, (LPSTR)buffer, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
-	// 	printf("Create Process failed (%d)\n", GetLastError());
-	// 	exit(1);
-	// }
-
-	if (!CreateProcess(NULL, (LPSTR)buffer, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
-		printf("Create Process failed (%d)\n", GetLastError());
-		exit(1);
-	}
-	WaitForSingleObject(pi.hProcess, INFINITE);
-	
-	DWORD exitStatus;
-	if (GetExitCodeProcess(pi.hProcess, (LPDWORD)&exitStatus)) {
-		if (exitStatus == 0) {
-			printf("Child(%d) exited -- success (%d)\n", pi.dwProcessId, (int)exitStatus);
-		} else if (exitStatus != 0) {
-			printf("Child(%d) exited -- failure (%d)\n", pi.dwProcessId, (int)exitStatus);
-		}
-	} else {
-		printf("Child(%d) did not exit (crashed?)\n", pi.dwProcessId);
-	}
-
-	CloseHandle(pi.hProcess);
-	CloseHandle(pi.hThread);
-}
-
-//UNFINISHED
-int winPipedExec(char ** tokens, int nTokens, int numPipes) {
-	STARTUPINFO siOne;
-    PROCESS_INFORMATION piOne;
-	BOOL status;
-	HANDLE hPipeRead, hPipeWrite;
-	SECURITY_ATTRIBUTES pipeSA = { sizeof(SECURITY_ATTRIBUTES), NULL, TRUE };
-
-
-	int toksSincePipe = 0;
-	for (int i = 0; i < numPipes + 1; i++) {
-		memset(&siOne, 0, sizeof(STARTUPINFO));
-		siOne.cb = sizeof(STARTUPINFO);
-		siOne.dwFlags = 0 | STARTF_USESTDHANDLES;
-		siOne.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
-		siOne.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
-		siOne.hStdError = GetStdHandle(STD_ERROR_HANDLE);
-		memset(&piOne, 0, sizeof(PROCESS_INFORMATION));
-
-		char pipedCmd[1][LINEBUFFERSIZE];
-		char execCmd[LINEBUFFERSIZE];
-		int count = 0;
-		
-		//Remember
-		strcpy(pipedCmd[0], "");
-
-		for (int j = toksSincePipe; j < nTokens; j++) {
-			if (strcmp(tokens[j], "|") == 0 || strcmp(tokens[j], "\0") == 0) {
-				toksSincePipe=j+1;
-				break;
-			} else {
-				strcat(pipedCmd[0], tokens[j]);
-				strcat(pipedCmd[0], " ");
-				toksSincePipe++;
-			}
-		}
-
-		if (i == 0) {
-			status = CreatePipe(&hPipeRead, &hPipeWrite, &pipeSA, 0);
-			// CloseHandle(hPipeWrite);
-			siOne.hStdOutput = hPipeWrite;
-		} else if (i == numPipes) {
-			CloseHandle(hPipeWrite);
-			siOne.hStdInput = hPipeRead;
-		} else {
-			siOne.hStdInput = hPipeRead;
-			CloseHandle(hPipeWrite);
-			status = CreatePipe(&hPipeRead, &hPipeWrite, &pipeSA, 0);
-		}
-
-		if (!status) {
-			fprintf(stderr, "Error: CreatePipe failed -- error %lu: %s\n", GetLastError(), strerror(GetLastError()));
-			return -1;
-		}
-
-		fprintf(stderr, "cmd: %s\n", pipedCmd);
-		
-		//Create process:
-		if ( !CreateProcess(NULL, (LPSTR)pipedCmd, NULL, NULL, TRUE, 0, NULL, NULL, &siOne, &piOne)) {
-			fprintf(stderr, "Create Process failed (%d)\n", GetLastError());
-			exit(1);
-		}
-		
-	}
-	CloseHandle(hPipeRead);
-	WaitForSingleObject(piOne.hProcess, INFINITE);
-
-	DWORD exitStatus;
-	if (GetExitCodeProcess(piOne.hProcess, (LPDWORD)&exitStatus)) {
-		if (exitStatus == 0) {
-			printf("Child(%d) exited -- success (%d)\n", piOne.dwProcessId, (int)exitStatus);
-		} else if (exitStatus != 0) {
-			printf("Child(%d) exited -- failure (%d)\n", piOne.dwProcessId, (int)exitStatus);
-		}
-	} else {
-		printf("Child(%d) did not exit (crashed?)\n", piOne.dwProcessId);
-	}
-
-	CloseHandle(piOne.hProcess);
-	CloseHandle(piOne.hThread);
-	return 1;
-}
-#endif
 
 #if defined ( OS_UNIX )
 int statusMessageHandler(pid_t pid, int status) {
@@ -494,48 +365,6 @@ void redirection(char** tokens, int direction ,int pos) {
 	fclose(fp);
 }
 #endif
-#if defined ( OS_WINDOWS )
-void winRedirection(char** tokens, int direction, int pos) {
-	STARTUPINFO si;
-	PROCESS_INFORMATION pi;
-	SECURITY_ATTRIBUTES fileSec = { sizeof(SECURITY_ATTRIBUTES), NULL, TRUE };
-	HANDLE fileIn, fileOut;
-
-	memset(&pi, 0, sizeof(STARTUPINFO));
-	si.cb = sizeof(STARTUPINFO);
-	si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
-	si.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
-	si.dwFlags = 0 | STARTF_USESTDHANDLES;
-	memset(&pi, 0, sizeof(PROCESS_INFORMATION));
-
-	if (tokens[pos+1] != NULL) {
-		// HANDLE fp = CreateFile(tokens[pos+1], GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, &fileSec, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL || FILE_ATTRIBUTE_READONLY, NULL);
-		// fp = fopen(tokens[pos+1], "r+");
-		// if (fp == NULL) {
-		// 	printf("Invalid filename at cmd: %d\n", pos+1);
-		// 	exit(1);
-		// }
-		
-		if (direction == 0) {
-			fileIn = CreateFile(tokens[pos+1], GENERIC_READ, 0, &fileSec, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
-			// dup2(fileno(fp), STDIN_FILENO);
-			// SetStdHandle(STD_INPUT_HANDLE, fp);
-			si.hStdInput = fileIn;
-		} else if (direction == 1) {
-			// dup2(fileno(fp), STDOUT_FILENO);
-			fileOut = CreateFile(tokens[pos+1], GENERIC_WRITE, FILE_SHARE_WRITE, &fileSec, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-			si.hStdOutput = fileOut;
-			// SetStdHandle(STD_OUTPUT_HANDLE, fileOut);
-		}
-		tokens[pos] = NULL;
-		tokens[pos+1] = NULL;
-		// CloseHandle(fileIn);
-		// CloseHandle(fileOut);
-	}
-	// fclose(fp);
-	
-}
-#endif
 
 /**
  * Actually do the work
@@ -811,9 +640,6 @@ int execFullCommandLine(
 		#if defined ( OS_UNIX )
 		execPipedCommandLine(tokensCpy, nTokens, numPipes);
 		#endif
-		#if defined ( OS_WINDOWS )
-		winPipedExec(tokensCpy, nTokens, numPipes);
-		#endif
 		return 0;
 	}
 
@@ -854,9 +680,6 @@ int execFullCommandLine(
 			statusMessageHandler(pid, status);
 		}
 	}
-	#endif
-	#if defined ( OS_WINDOWS )
-		winExec(tokens);
 	#endif
 
 	return 1;
