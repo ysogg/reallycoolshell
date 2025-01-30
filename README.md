@@ -3,6 +3,8 @@ Course schedule/workload was kind of weird so didn't get as much time as I wante
 TODO:
 - Update README
 - Fix existing linux code (some things aren't proeprly tested for edge cases and most things will likely not work in combination with other functions). Going to leave the Darwin stuff in, should work for now but going forward it will likely be removed.
+- Cleanup uncaught FDs
+- Split functions up into proper separated files
 - Secret other bullet point ?
 
 # IPC in the Shell using Pipes

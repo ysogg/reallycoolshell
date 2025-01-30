@@ -37,10 +37,6 @@ int BG_Count = 0;
  * BG:
  * - Fix output to be in line with bash
     -> This means cleaning up when executing another cmd
- * Port:
- * - Check if redirect works
- * - Check if var sub works (only diff should be no regex.h on win)
- * - Get BG to work
 */
 
 /**
@@ -248,17 +244,6 @@ int assignVariable(char ** const tokens, int nTokens, int tokPos) {
 	VarList[ListIndex] = newVar;
 	ListIndex++;
 	return 0;
-
-	// fprintf(stderr, "Testing save\n");
-	// for (int i = 0; i < ListIndex; i++) {
-	// 	if (VarList[i].name != NULL) {
-	// 		printf("%s: ", VarList[i].name);
-	// 		for (int j = 0; j < valueLength; j++) {
-	// 			printf("%s ", VarList[i].value[j]);
-	// 		}
-	// 		printf("\n");
-	// 	}
-	// }
 }
 
 char* subVariable(char holdToken[LINEBUFFERSIZE], int start, int end) {
@@ -411,8 +396,6 @@ int execFullCommandLine(
 			break;
 		}
 	}
-
-	// printf("1\n");
 	
 	#if defined ( OS_UNIX )
 	// -- GLOB -- //
@@ -444,7 +427,6 @@ int execFullCommandLine(
 	}
 	#endif
 
-	// printf("2\n");
 	//-- VAR SUB -- //
 	for (int i = 0; i < nTokens; i++) {
 		if (varAssign == 0) {
@@ -486,10 +468,8 @@ int execFullCommandLine(
 
 	//Store vars as name string : token list with n elements
 	if (varAssign > 0) {
-		// #if defined ( OS_UNIX )
 		fprintf(stderr, "TEST1\n");
 		assignVariable(tokensCpy, nTokens, varAssign);
-		// #endif
 		return 0;
 	}
 
@@ -509,8 +489,6 @@ int execFullCommandLine(
 	int numOfCmds = 2;
 	int manualNum = 0;
 	char *manualCmds[2] = {"cd", "exit"};
-	// manualCmds[0] = "cd";
-	// manualCmds[1] = "exit";
 
 	for (int i = 0; i < numOfCmds; i++) {
 		if (strcmp(manualCmds[i], tokensCpy[0]) == 0) {
